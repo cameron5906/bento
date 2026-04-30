@@ -4,7 +4,7 @@ use clap::Args;
 
 use craterun_bundle::bundle::BundleWriter;
 use craterun_bundle::compose::ComposeFile;
-use craterun_bundle::manifest::compiled_manifest::{CompiledManifest, ServiceEntry};
+use craterun_bundle::manifest::compiled_manifest::{CompiledManifest, ServiceEntry, ServiceVolumeMount};
 use craterun_bundle::manifest::AppManifest;
 use craterun_core::types::ServiceRole;
 
@@ -116,6 +116,7 @@ pub async fn run(args: BuildArgs) -> anyhow::Result<()> {
                 env: extract_env(svc),
                 depends_on: compose.depends_on_list(name),
                 restart_policy: Default::default(),
+                volume_mounts: extract_volume_mounts(svc),
             }
         })
         .collect();
@@ -190,6 +191,27 @@ fn extract_env(
         }
     }
     env
+}
+
+/// Parse named volume mounts from compose service (e.g. "db-data:/var/lib/postgresql/data")
+fn extract_volume_mounts(
+    svc: &craterun_bundle::compose::compose_file::ComposeService,
+) -> Vec<ServiceVolumeMount> {
+    svc.volumes
+        .iter()
+        .filter_map(|v| {
+            let parts: Vec<&str> = v.splitn(2, ':').collect();
+            if parts.len() == 2 && !parts[0].starts_with('/') && !parts[0].starts_with('.') {
+                // Named volume (not a bind mount path)
+                Some(ServiceVolumeMount {
+                    name: parts[0].to_string(),
+                    mount_path: parts[1].to_string(),
+                })
+            } else {
+                None
+            }
+        })
+        .collect()
 }
 
 fn serde_yaml_value_to_string(v: &serde_yaml::Value) -> String {

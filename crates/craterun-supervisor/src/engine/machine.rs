@@ -223,22 +223,18 @@ impl SupervisorEngine {
                 let host_port = base_port;
                 base_port += 1;
 
-                let volumes: Vec<VolumeMount> = self
-                    .manifest
-                    .volumes
-                    .keys()
-                    .filter(|_vn| {
-                        // Match volumes by checking if any service in the compose references them
-                        // For MVP, we pass all declared volumes to all services that might use them
-                        false
-                    })
-                    .map(|vn| VolumeMount {
+                // Mount named volumes declared in the service's volume_mounts.
+                // Volume names are prefixed with the app namespace to avoid conflicts.
+                let volumes: Vec<VolumeMount> = svc
+                    .volume_mounts
+                    .iter()
+                    .map(|vm| VolumeMount {
                         volume_name: format!(
                             "craterun-{}-{}",
                             self.app_id.as_str().replace('.', "-"),
-                            vn
+                            vm.name
                         ),
-                        container_path: String::new(),
+                        container_path: vm.mount_path.clone(),
                     })
                     .collect();
 

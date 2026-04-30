@@ -56,6 +56,16 @@ pub struct ServiceEntry {
     pub depends_on: Vec<String>,
     #[serde(default)]
     pub restart_policy: RestartPolicy,
+    /// Named volume mounts for this service (e.g. "db-data" -> "/var/lib/postgresql/data")
+    #[serde(default)]
+    pub volume_mounts: Vec<ServiceVolumeMount>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct ServiceVolumeMount {
+    pub name: String,
+    pub mount_path: String,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
