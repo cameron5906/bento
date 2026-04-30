@@ -12,7 +12,11 @@ export function useSupervisorStatus() {
 
   const connect = useCallback(async (port: number, token: string) => {
     try {
-      await invoke("connect_supervisor", { port, token });
+      if (token !== "auto") {
+        // Manual dev connection
+        await invoke("connect_supervisor", { port, token });
+      }
+      // For auto-launch, the Rust side already connected — just start polling
       setConnected(true);
       setError(null);
     } catch (e) {
@@ -37,6 +41,7 @@ export function useSupervisorStatus() {
         setStatus(result);
         setError(null);
       } catch (e) {
+        // Don't disconnect on transient errors during startup
         setError(String(e));
       }
     };
