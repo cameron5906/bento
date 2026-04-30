@@ -9,7 +9,7 @@ Status of each milestone from the implementation brief (DOC.pdf).
 | M3 | Tauri Shell Prototype | DONE | `4ba01eb` | React UI, supervisor client, state-driven screens |
 | M4 | Windows Managed Runtime Spike | DONE | see below | WSL2 + containerd adapter. Needs VM testing. |
 | M5 | Native Windows Installer | DONE | see below | NSIS script generator + CLI integration |
-| M6 | Repair, Reset, Diagnostics | NOT STARTED | — | Supervisor repair flow, diagnostics export |
+| M6 | Repair, Reset, Diagnostics | DONE | see below | Diagnostics export, error mapping, repair flow |
 | M7 | Consumer Certification Gate | NOT STARTED | — | Hardened certify command, build gate |
 | M8 | First External Test | NOT STARTED | — | Hand to non-technical user, observe |
 
@@ -56,3 +56,16 @@ NSIS installer generator (`craterun-cli/src/installer/nsis.rs`) produces a compl
 certify → build → generate .nsi → compile with makensis.
 
 Use `--script-only` to generate the .nsi without requiring makensis on PATH.
+
+## M6 Notes
+
+Repair and ResetData commands were implemented in M2's state machine. M6 adds:
+
+- `diagnostics/mod.rs`: `DiagnosticsBundle` struct collecting app state, system
+  info (OS, arch, memory, disk), runtime adapter info, service logs, and health
+  check config. Explicitly excludes secrets, tokens, env vars, and user data.
+- `GET /diagnostics/export` API endpoint returns the JSON bundle.
+- API routes now use `CompiledManifest` for app-specific status messages.
+- Repair flow: stop -> remove (keep volumes) -> re-prepare from ImportingImages.
+- ResetData flow: stop -> remove (including volumes) -> stopped. Requires
+  `{ "confirm": true }` in POST body as a safety gate.

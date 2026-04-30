@@ -6,6 +6,8 @@ use serde::Deserialize;
 use craterun_core::types::StatusResponse;
 use craterun_core::SupervisorState;
 
+use crate::diagnostics::DiagnosticsBundle;
+
 use super::AppState;
 use crate::engine::SupervisorCommand;
 
@@ -20,9 +22,9 @@ pub async fn get_status(State(state): State<AppState>) -> Json<StatusResponse> {
     };
 
     let response = StatusResponse {
-        app_id: state.app_name.clone(),
+        app_id: state.manifest.app.id.clone(),
         state: current.clone(),
-        message: current.user_message("App").to_string(),
+        message: current.user_message(&state.manifest.app.name).to_string(),
         progress: current.progress(),
         app_url,
         error,
@@ -72,13 +74,22 @@ pub async fn post_reset_data(
 }
 
 pub async fn get_logs() -> Json<Vec<craterun_core::types::LogLine>> {
+    // Full implementation would query the runtime adapter for service logs.
+    // For now, return empty — the diagnostics export captures logs separately.
     Json(Vec::new())
 }
 
-pub async fn get_diagnostics() -> Json<serde_json::Value> {
-    Json(serde_json::json!({
-        "status": "diagnostics export not yet implemented"
-    }))
+pub async fn get_diagnostics(State(state): State<AppState>) -> Json<DiagnosticsBundle> {
+    let current = state.state_rx.borrow().clone();
+
+    let bundle = DiagnosticsBundle::collect(
+        &state.manifest,
+        &current,
+        &state.adapter_name,
+        Vec::new(), // logs would be populated from runtime adapter
+    );
+
+    Json(bundle)
 }
 
 async fn send_command(state: &AppState, cmd: SupervisorCommand) -> StatusCode {

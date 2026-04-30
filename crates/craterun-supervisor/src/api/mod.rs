@@ -10,13 +10,16 @@ use tokio::sync::{mpsc, watch};
 
 use craterun_core::SupervisorState;
 
+use craterun_bundle::manifest::compiled_manifest::CompiledManifest;
+
 use crate::engine::SupervisorCommand;
 
 #[derive(Clone)]
 pub struct AppState {
     pub state_rx: watch::Receiver<SupervisorState>,
     pub cmd_tx: mpsc::Sender<SupervisorCommand>,
-    pub app_name: String,
+    pub manifest: CompiledManifest,
+    pub adapter_name: String,
     pub token: String,
 }
 

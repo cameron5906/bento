@@ -1,4 +1,5 @@
 mod api;
+mod diagnostics;
 mod engine;
 mod health;
 mod proxy;
@@ -44,6 +45,14 @@ async fn main() -> anyhow::Result<()> {
     let paths = craterun_core::paths::AppPaths::new(app_id.clone(), manifest.app.name.clone());
     write_sock_info(&paths, api_port, &token)?;
 
+    let api_state = api::AppState {
+        state_rx,
+        cmd_tx,
+        manifest: manifest.clone(),
+        adapter_name: adapter.adapter_name().to_string(),
+        token: token.clone(),
+    };
+
     let engine = SupervisorEngine::new(
         app_id,
         manifest,
@@ -56,13 +65,6 @@ async fn main() -> anyhow::Result<()> {
     let engine_handle = tokio::spawn(async move {
         engine.run().await;
     });
-
-    let api_state = api::AppState {
-        state_rx,
-        cmd_tx,
-        app_name: "".into(), // filled from manifest in api
-        token: token.clone(),
-    };
 
     tracing::info!("Supervisor API on 127.0.0.1:{}", api_port);
 
