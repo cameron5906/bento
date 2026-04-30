@@ -1,11 +1,8 @@
-use std::net::SocketAddr;
+//! Local reverse proxy that maps path prefixes to container host ports.
+//! The user never sees individual service ports — only this single proxy URL.
 
-use axum::body::Body;
-use axum::extract::Request;
-use axum::response::{IntoResponse, Response};
-use axum::routing::any;
-use axum::Router;
-use reqwest::Client;
+use std::net::SocketAddr;
+use std::sync::Arc;
 
 use craterun_bundle::manifest::compiled_manifest::CompiledManifest;
 use craterun_runtime::types::RuntimePlan;
@@ -19,12 +16,11 @@ pub fn allocate_proxy_port() -> Result<u16, std::io::Error> {
 
 struct ProxyRoute {
     path_prefix: String,
-    target_host: String,
     target_port: u16,
 }
 
 pub struct ReverseProxy {
-    routes: Vec<ProxyRoute>,
+    routes: Arc<Vec<ProxyRoute>>,
 }
 
 impl ReverseProxy {
@@ -36,108 +32,134 @@ impl ReverseProxy {
                 let planned = plan.services.iter().find(|s| s.name == route.service)?;
                 Some(ProxyRoute {
                     path_prefix: route.path.clone(),
-                    target_host: "127.0.0.1".to_string(),
                     target_port: planned.host_port,
                 })
             })
             .collect();
 
-        Self { routes }
+        Self {
+            routes: Arc::new(routes),
+        }
     }
 
     pub async fn run(self, port: u16) -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
-        let routes = std::sync::Arc::new(self.routes);
-        let client = Client::new();
-
-        let routes_clone = routes.clone();
-        let client_clone = client.clone();
-
-        let app = Router::new().fallback(any(move |req: Request| {
-            let routes = routes_clone.clone();
-            let client = client_clone.clone();
-            async move { proxy_handler(req, &routes, &client).await }
-        }));
-
         let addr = SocketAddr::from(([127, 0, 0, 1], port));
         let listener = tokio::net::TcpListener::bind(addr).await?;
         tracing::info!("Reverse proxy listening on {}", addr);
-        axum::serve(listener, app).await?;
-        Ok(())
+
+        loop {
+            let (stream, _) = listener.accept().await?;
+            let routes = self.routes.clone();
+
+            tokio::spawn(async move {
+                if let Err(e) = handle_connection(stream, &routes).await {
+                    tracing::debug!("proxy connection error: {}", e);
+                }
+            });
+        }
     }
 }
 
-async fn proxy_handler(
-    req: Request,
+/// Handle a single TCP connection by reading the HTTP request,
+/// matching a route, forwarding to the upstream container, and
+/// relaying the response byte-for-byte.
+async fn handle_connection(
+    mut client_stream: tokio::net::TcpStream,
     routes: &[ProxyRoute],
-    client: &Client,
-) -> Response {
-    let path = req.uri().path();
+) -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
+    use tokio::io::{AsyncReadExt, AsyncWriteExt};
 
-    let matched = routes
+    // Read the request (enough to parse the first line for path matching)
+    let mut buf = vec![0u8; 8192];
+    let n = client_stream.read(&mut buf).await?;
+    if n == 0 {
+        return Ok(());
+    }
+    let request_bytes = &buf[..n];
+
+    // Parse the request path from the first line (e.g. "GET /api/health HTTP/1.1")
+    let first_line = request_bytes
+        .split(|&b| b == b'\n')
+        .next()
+        .unwrap_or(request_bytes);
+    let first_line_str = String::from_utf8_lossy(first_line);
+    let path = first_line_str
+        .split_whitespace()
+        .nth(1)
+        .unwrap_or("/");
+
+    // Match the longest path prefix
+    let route = routes
         .iter()
         .filter(|r| path.starts_with(&r.path_prefix))
         .max_by_key(|r| r.path_prefix.len());
 
-    let route = match matched {
+    let route = match route {
         Some(r) => r,
         None => {
-            return (
-                axum::http::StatusCode::BAD_GATEWAY,
-                "no matching route",
-            )
-                .into_response();
+            let resp = b"HTTP/1.1 502 Bad Gateway\r\nContent-Length: 16\r\n\r\nno matching route";
+            client_stream.write_all(resp).await?;
+            return Ok(());
         }
     };
 
-    let stripped = if route.path_prefix == "/" {
+    // Rewrite the path: strip the prefix for non-root routes
+    let upstream_path = if route.path_prefix == "/" {
         path.to_string()
     } else {
-        path.strip_prefix(&route.path_prefix)
-            .unwrap_or(path)
-            .to_string()
+        let stripped = path.strip_prefix(&route.path_prefix).unwrap_or(path);
+        if stripped.is_empty() || !stripped.starts_with('/') {
+            format!("/{}", stripped)
+        } else {
+            stripped.to_string()
+        }
     };
 
-    let target_path = if stripped.is_empty() || !stripped.starts_with('/') {
-        format!("/{}", stripped)
+    // Rewrite the request line to use the upstream path
+    let mut rewritten = Vec::new();
+    let parts: Vec<&str> = first_line_str.trim().splitn(3, ' ').collect();
+    if parts.len() == 3 {
+        rewritten.extend_from_slice(
+            format!("{} {} {}\r\n", parts[0], upstream_path, parts[2]).as_bytes(),
+        );
     } else {
-        stripped
+        rewritten.extend_from_slice(first_line);
+        rewritten.extend_from_slice(b"\r\n");
+    }
+
+    // Append remaining headers (skip the first line we already rewrote)
+    let rest = &request_bytes[first_line.len()..];
+    // Skip the \n or \r\n after the first line
+    let rest = if rest.starts_with(b"\r\n") {
+        &rest[2..]
+    } else if rest.starts_with(b"\n") {
+        &rest[1..]
+    } else {
+        rest
+    };
+    rewritten.extend_from_slice(rest);
+
+    // Connect to the upstream container
+    let upstream_addr = format!("127.0.0.1:{}", route.target_port);
+    let mut upstream = match tokio::net::TcpStream::connect(&upstream_addr).await {
+        Ok(s) => s,
+        Err(e) => {
+            let body = format!("upstream connect error: {}", e);
+            let resp = format!(
+                "HTTP/1.1 502 Bad Gateway\r\nContent-Length: {}\r\n\r\n{}",
+                body.len(),
+                body
+            );
+            client_stream.write_all(resp.as_bytes()).await?;
+            return Ok(());
+        }
     };
 
-    let target_url = format!(
-        "http://{}:{}{}",
-        route.target_host, route.target_port, target_path
-    );
+    // Forward the request
+    upstream.write_all(&rewritten).await?;
 
-    let method = req.method().clone();
-    let headers = req.headers().clone();
+    // Relay the response back — simple bidirectional copy
+    tokio::io::copy_bidirectional(&mut client_stream, &mut upstream).await?;
 
-    let mut proxy_req = client.request(method, &target_url);
-    for (key, val) in headers.iter() {
-        if key != "host" {
-            proxy_req = proxy_req.header(key, val);
-        }
-    }
-
-    match proxy_req.send().await {
-        Ok(resp) => {
-            let status = axum::http::StatusCode::from_u16(resp.status().as_u16())
-                .unwrap_or(axum::http::StatusCode::BAD_GATEWAY);
-            let mut builder = Response::builder().status(status);
-            for (key, val) in resp.headers().iter() {
-                builder = builder.header(key, val);
-            }
-            let body = resp.bytes().await.unwrap_or_default();
-            builder.body(Body::from(body)).unwrap_or_else(|_| {
-                (axum::http::StatusCode::BAD_GATEWAY, "proxy error").into_response()
-            })
-        }
-        Err(e) => {
-            tracing::error!("proxy request failed: {}", e);
-            (
-                axum::http::StatusCode::BAD_GATEWAY,
-                format!("upstream error: {}", e),
-            )
-                .into_response()
-        }
-    }
+    Ok(())
 }
