@@ -2,6 +2,8 @@ use std::path::PathBuf;
 
 use clap::Args;
 
+use craterun_bundle::bundle::BundleReader;
+use crate::installer::nsis::{InstallerBinaries, NsisInstaller};
 use crate::output;
 
 #[derive(Args)]
@@ -21,6 +23,10 @@ pub struct PackageArgs {
     /// Output directory
     #[arg(short, long, default_value = "./dist")]
     pub output: PathBuf,
+
+    /// Skip NSIS compilation (only generate the .nsi script)
+    #[arg(long)]
+    pub script_only: bool,
 }
 
 pub async fn run(args: PackageArgs) -> anyhow::Result<()> {
@@ -32,26 +38,90 @@ pub async fn run(args: PackageArgs) -> anyhow::Result<()> {
             manifest: args.manifest.clone(),
         };
         super::certify::run(certify_args).await?;
-
-        output::info("Running build...");
-        let build_args = super::build::BuildArgs {
-            manifest: args.manifest,
-            output: args.output.join("bundle"),
-            target: args.target,
-        };
-        super::build::run(build_args).await?;
-
-        output::info("Installer generation not yet implemented.");
-        output::success("Consumer package preparation complete (bundle only).");
-    } else {
-        output::info("Running build...");
-        let build_args = super::build::BuildArgs {
-            manifest: args.manifest,
-            output: args.output.join("bundle"),
-            target: args.target,
-        };
-        super::build::run(build_args).await?;
     }
 
+    output::info("Running build...");
+    let bundle_dir = args.output.join("bundle");
+    let build_args = super::build::BuildArgs {
+        manifest: args.manifest.clone(),
+        output: bundle_dir.clone(),
+        target: args.target.clone(),
+    };
+    super::build::run(build_args).await?;
+
+    if args.consumer && args.target.starts_with("windows") {
+        output::info("Generating Windows installer...");
+
+        let reader = BundleReader::new(&bundle_dir);
+        let manifest = reader.read_manifest()?;
+
+        // Locate the built binaries from the workspace target directory.
+        // In a real release workflow these would be pre-built and placed
+        // in a known location. For development, we look in target/release
+        // or target/debug relative to the workspace root.
+        let binaries = locate_binaries()?;
+
+        let installer = NsisInstaller::new(
+            manifest,
+            bundle_dir.clone(),
+            args.output.clone(),
+        );
+
+        let script_path = installer.generate_script(&binaries)?;
+        output::success(&format!("Generated NSIS script: {}", script_path.display()));
+
+        if args.script_only {
+            output::info("--script-only: skipping makensis compilation.");
+        } else {
+            match installer.compile(&script_path) {
+                Ok(exe_path) => {
+                    output::success(&format!("Installer: {}", exe_path.display()));
+                }
+                Err(e) => {
+                    output::failure(&format!("{}", e));
+                    output::info("The .nsi script was generated and can be compiled manually.");
+                }
+            }
+        }
+    } else if args.consumer {
+        output::info("Installer generation is only supported for windows targets.");
+    }
+
+    output::success("Package complete.");
     Ok(())
+}
+
+/// Try to find the shell and supervisor binaries in the workspace target dir.
+/// Falls back to placeholder paths if not found (the .nsi script is still
+/// generated and can be edited before compilation).
+fn locate_binaries() -> anyhow::Result<InstallerBinaries> {
+    let search_dirs = ["target/release", "target/debug"];
+
+    let shell_names = ["craterun-shell.exe", "craterun_shell.exe"];
+    let supervisor_names = ["craterun-supervisor.exe", "craterun_supervisor.exe"];
+
+    let mut shell_exe = PathBuf::from("craterun-shell.exe");
+    let mut supervisor_exe = PathBuf::from("craterun-supervisor.exe");
+
+    for dir in &search_dirs {
+        for name in &shell_names {
+            let path = PathBuf::from(dir).join(name);
+            if path.exists() {
+                shell_exe = path;
+                break;
+            }
+        }
+        for name in &supervisor_names {
+            let path = PathBuf::from(dir).join(name);
+            if path.exists() {
+                supervisor_exe = path;
+                break;
+            }
+        }
+    }
+
+    Ok(InstallerBinaries {
+        shell_exe,
+        supervisor_exe,
+    })
 }
