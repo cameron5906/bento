@@ -35,15 +35,7 @@ pub async fn launch_supervisor(
     let supervisor_path = find_supervisor(&exe_dir);
     let bundle_path = exe_dir.join("bundle");
 
-    let child = tokio::process::Command::new(&supervisor_path)
-        .arg(bundle_path.to_string_lossy().as_ref())
-        .kill_on_drop(true) // stop supervisor when shell exits
-        .spawn()
-        .map_err(|e| format!("failed to launch supervisor: {}", e))?;
-
-    *state.child.lock().await = Some(child);
-
-    // Read the bundle manifest to get the app ID, then find the sock file
+    // Read app ID first so we can clean up stale state before launching
     let manifest_path = bundle_path.join("manifest.json");
     let app_id = if manifest_path.exists() {
         let content = std::fs::read_to_string(&manifest_path)
@@ -58,8 +50,19 @@ pub async fn launch_supervisor(
         "unknown".to_string()
     };
 
-    // Wait for supervisor.sock.json to appear (supervisor writes it on startup)
+    // Delete stale sock file so we only read the fresh one from the new supervisor
     let sock_path = supervisor_sock_path(&app_id);
+    let _ = std::fs::remove_file(&sock_path);
+
+    let child = tokio::process::Command::new(&supervisor_path)
+        .arg(bundle_path.to_string_lossy().as_ref())
+        .kill_on_drop(true) // stop supervisor when shell exits
+        .spawn()
+        .map_err(|e| format!("failed to launch supervisor: {}", e))?;
+
+    *state.child.lock().await = Some(child);
+
+    // Wait for the new supervisor to write its sock file
     let sock_info = wait_for_sock_file(&sock_path).await?;
 
     let client = Arc::new(SupervisorClient::new(sock_info.port, sock_info.token.clone()));
