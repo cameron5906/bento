@@ -68,6 +68,12 @@ impl RuntimeAdapter for ExistingDockerAdapter {
         for service in &plan.services {
             let container = Self::container_name(&plan.app_id, &service.name);
 
+            // Remove any leftover container from a previous run so the name is free
+            let _ = Command::new("docker")
+                .args(["rm", "-f", &container])
+                .output()
+                .await;
+
             let mut args = vec![
                 "run".to_string(),
                 "-d".to_string(),
@@ -77,9 +83,16 @@ impl RuntimeAdapter for ExistingDockerAdapter {
                 plan.network_name.clone(),
                 "--network-alias".to_string(),
                 service.name.clone(),
-                "-p".to_string(),
-                format!("127.0.0.1:{}:{}", service.host_port, service.container_port),
             ];
+
+            // Only bind ports for services that expose them (db has port 0)
+            if service.container_port > 0 {
+                args.push("-p".to_string());
+                args.push(format!(
+                    "127.0.0.1:{}:{}",
+                    service.host_port, service.container_port
+                ));
+            }
 
             for (key, val) in &service.env {
                 args.push("-e".to_string());
