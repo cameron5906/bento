@@ -46,6 +46,7 @@ pub async fn run(args: PackageArgs) -> anyhow::Result<()> {
         manifest: args.manifest.clone(),
         output: bundle_dir.clone(),
         target: args.target.clone(),
+        skip_images: false,
     };
     super::build::run(build_args).await?;
 

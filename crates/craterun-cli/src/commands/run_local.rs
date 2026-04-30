@@ -19,6 +19,7 @@ pub async fn run(args: RunLocalArgs) -> anyhow::Result<()> {
         manifest: args.manifest,
         output: PathBuf::from("./dist/bundle"),
         target: "local".into(),
+        skip_images: false,
     };
     super::build::run(build_args).await?;
 

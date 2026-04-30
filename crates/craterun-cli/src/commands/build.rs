@@ -8,6 +8,7 @@ use craterun_bundle::manifest::compiled_manifest::{CompiledManifest, ServiceEntr
 use craterun_bundle::manifest::AppManifest;
 use craterun_core::types::ServiceRole;
 
+use crate::builder::image_pipeline;
 use crate::output;
 
 #[derive(Args)]
@@ -23,6 +24,10 @@ pub struct BuildArgs {
     /// Target platform
     #[arg(long, default_value = "windows-x64")]
     pub target: String,
+
+    /// Skip image build/export (only generate manifest)
+    #[arg(long)]
+    pub skip_images: bool,
 }
 
 pub async fn run(args: BuildArgs) -> anyhow::Result<()> {
@@ -31,18 +36,60 @@ pub async fn run(args: BuildArgs) -> anyhow::Result<()> {
     let manifest = AppManifest::from_file(&args.manifest)?;
     output::success(&format!("Loaded manifest: {}", manifest.app.name));
 
-    let compose_path = args
+    let manifest_dir = args
         .manifest
         .parent()
         .unwrap_or_else(|| std::path::Path::new("."))
-        .join(&manifest.compose.file);
+        .to_path_buf();
 
+    let compose_path = manifest_dir.join(&manifest.compose.file);
     let compose = ComposeFile::from_file(&compose_path)?;
     output::success(&format!(
         "Loaded compose file: {} services",
         compose.services.len()
     ));
 
+    let writer = BundleWriter::new(&args.output);
+    writer.ensure_dirs()?;
+
+    let compose_dir = compose_path
+        .parent()
+        .unwrap_or_else(|| std::path::Path::new("."));
+
+    let project_name = manifest
+        .compose
+        .project_name
+        .as_deref()
+        .unwrap_or(manifest.app.id.as_str());
+
+    // Build and export images
+    let mut build_results = Vec::new();
+    if !args.skip_images {
+        for (name, svc) in &compose.services {
+            match image_pipeline::build_and_export(
+                name,
+                svc,
+                project_name,
+                compose_dir,
+                &writer.images_dir(),
+            )
+            .await
+            {
+                Ok(result) => {
+                    output::success(&format!("Exported: {} ({})", result.image_tag, result.digest));
+                    build_results.push(result);
+                }
+                Err(e) => {
+                    output::failure(&format!("Failed to build '{}': {}", name, e));
+                    return Err(e);
+                }
+            }
+        }
+    } else {
+        output::info("--skip-images: skipping image build/export.");
+    }
+
+    // Build service entries for the compiled manifest, using digest from build
     let services: Vec<ServiceEntry> = compose
         .services
         .iter()
@@ -53,19 +100,17 @@ pub async fn run(args: BuildArgs) -> anyhow::Result<()> {
                 .and_then(|p| p.container_port())
                 .unwrap_or(0);
 
-            let role = infer_role(name, svc);
-
-            let _image_name = svc
-                .image
-                .clone()
-                .unwrap_or_else(|| format!("{}-{}", manifest.app.id, name));
+            let digest = build_results
+                .iter()
+                .find(|r| r.service_name == *name)
+                .map(|r| r.digest.clone());
 
             ServiceEntry {
                 name: name.clone(),
                 image_archive: format!("images/{}-linux-amd64.oci.tar.zst", name),
-                image_digest: None,
+                image_digest: digest,
                 container_port: port,
-                role,
+                role: infer_role(name),
                 env: extract_env(svc),
                 depends_on: compose.depends_on_list(name),
                 restart_policy: Default::default(),
@@ -75,8 +120,6 @@ pub async fn run(args: BuildArgs) -> anyhow::Result<()> {
 
     let compiled = CompiledManifest::from_app_manifest(&manifest, services, &args.target);
 
-    let writer = BundleWriter::new(&args.output);
-    writer.ensure_dirs()?;
     writer.write_manifest(&compiled)?;
     output::success("Wrote manifest.json");
 
@@ -89,22 +132,35 @@ pub async fn run(args: BuildArgs) -> anyhow::Result<()> {
     )?;
     output::success("Wrote shell-config.json");
 
-    output::info("Image build/export not yet implemented — bundle structure created.");
-    output::success(&format!("Bundle output: {}", args.output.display()));
+    // Copy icon if it exists
+    if let Some(ref icon) = manifest.app.icon {
+        let icon_path = manifest_dir.join(icon);
+        if icon_path.exists() {
+            writer.copy_asset(&icon_path, "icon.png")?;
+            output::success("Copied icon");
+        }
+    }
 
+    if !build_results.is_empty() {
+        image_pipeline::print_size_report(&build_results);
+    }
+
+    output::success(&format!("Bundle output: {}", args.output.display()));
     Ok(())
 }
 
-fn infer_role(
-    name: &str,
-    _svc: &craterun_bundle::compose::compose_file::ComposeService,
-) -> ServiceRole {
+fn infer_role(name: &str) -> ServiceRole {
     let lower = name.to_lowercase();
     if lower.contains("web") || lower.contains("frontend") || lower.contains("ui") {
         ServiceRole::Frontend
     } else if lower.contains("api") || lower.contains("backend") || lower.contains("server") {
         ServiceRole::Backend
-    } else if lower.contains("db") || lower.contains("postgres") || lower.contains("mysql") || lower.contains("redis") || lower.contains("mongo") {
+    } else if lower.contains("db")
+        || lower.contains("postgres")
+        || lower.contains("mysql")
+        || lower.contains("redis")
+        || lower.contains("mongo")
+    {
         ServiceRole::Database
     } else {
         ServiceRole::Worker

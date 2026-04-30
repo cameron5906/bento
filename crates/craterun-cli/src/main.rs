@@ -1,3 +1,4 @@
+mod builder;
 mod cli;
 mod commands;
 mod installer;
