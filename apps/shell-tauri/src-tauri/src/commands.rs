@@ -5,7 +5,7 @@ use serde::Serialize;
 use tauri::State;
 use tokio::sync::Mutex;
 
-use craterun_core::types::{StatusResponse, SupervisorSockInfo};
+use bento_core::types::{StatusResponse, SupervisorSockInfo};
 
 use crate::supervisor_client::SupervisorClient;
 
@@ -132,9 +132,9 @@ pub async fn send_command(
 
 fn find_supervisor(exe_dir: &std::path::Path) -> PathBuf {
     #[cfg(windows)]
-    let suffixes = ["-supervisor.exe", "craterun-supervisor.exe"];
+    let suffixes = ["-supervisor.exe", "bento-supervisor.exe"];
     #[cfg(not(windows))]
-    let suffixes = ["-supervisor", "craterun-supervisor"];
+    let suffixes = ["-supervisor", "bento-supervisor"];
 
     for entry in std::fs::read_dir(exe_dir).into_iter().flatten() {
         if let Ok(e) = entry {
@@ -146,15 +146,15 @@ fn find_supervisor(exe_dir: &std::path::Path) -> PathBuf {
     }
 
     #[cfg(windows)]
-    return exe_dir.join("craterun-supervisor.exe");
+    return exe_dir.join("bento-supervisor.exe");
     #[cfg(not(windows))]
-    return exe_dir.join("craterun-supervisor");
+    return exe_dir.join("bento-supervisor");
 }
 
 fn supervisor_sock_path(app_id: &str, app_name: &str) -> PathBuf {
-    let id = craterun_core::AppId::new(app_id)
-        .unwrap_or_else(|_| craterun_core::AppId::new("com.craterun.unknown").unwrap());
-    let paths = craterun_core::paths::AppPaths::new(id, app_name.to_string());
+    let id = bento_core::AppId::new(app_id)
+        .unwrap_or_else(|_| bento_core::AppId::new("com.bento.unknown").unwrap());
+    let paths = bento_core::paths::AppPaths::new(id, app_name.to_string());
     paths.supervisor_sock_file()
 }
 

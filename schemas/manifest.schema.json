@@ -1,6 +1,6 @@
 {
   "$schema": "https://json-schema.org/draft/2020-12/schema",
-  "title": "CrateRun Compiled Manifest",
+  "title": "Bento Compiled Manifest",
   "description": "Schema for manifest.json inside .appcrate bundles",
   "type": "object",
   "required": ["schemaVersion", "app", "runtime", "services", "routes", "health"],

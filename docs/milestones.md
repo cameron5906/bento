@@ -34,7 +34,7 @@ needs integration testing on a clean Windows 11 VM. The `prepare()` method stubs
 distro import — full implementation requires:
 
 1. A pre-built minimal Alpine/Debian WSL distro tarball with containerd + nerdctl
-2. `wsl --import craterun-<appId> <installDir> <tarball> --version 2`
+2. `wsl --import bento-<appId> <installDir> <tarball> --version 2`
 3. Running the bootstrap script to start containerd
 4. Verifying port forwarding from WSL to Windows host
 
@@ -42,7 +42,7 @@ This is tracked as the highest-risk item. See docs/decisions.md ADR-009.
 
 ## M5 Notes
 
-NSIS installer generator (`craterun-cli/src/installer/nsis.rs`) produces a complete
+NSIS installer generator (`bento-cli/src/installer/nsis.rs`) produces a complete
 `.nsi` script that `makensis` compiles into a self-extracting `.exe`. Features:
 
 - Per-user install to `%LOCALAPPDATA%\Programs\<AppName>` (no admin elevation)
@@ -52,7 +52,7 @@ NSIS installer generator (`craterun-cli/src/installer/nsis.rs`) produces a compl
 - Post-install auto-launch
 - Uninstaller with "remove app data?" prompt
 
-`craterun package --consumer --target windows-x64` runs the full pipeline:
+`bento package --consumer --target windows-x64` runs the full pipeline:
 certify → build → generate .nsi → compile with makensis.
 
 Use `--script-only` to generate the .nsi without requiring makensis on PATH.
@@ -72,7 +72,7 @@ Repair and ResetData commands were implemented in M2's state machine. M6 adds:
 
 ## M7 Notes
 
-`craterun certify` now runs 17 checks:
+`bento certify` now runs 17 checks:
 
 **Manifest checks:** app name, app version, icon, frontend route, health check
 configured, health check service exists in compose, all routed services exist,
@@ -82,5 +82,5 @@ persistent volumes declared.
 mounts, no dangerous capabilities, no arbitrary host mounts, all host ports
 auto-assigned, no external networks, no external volumes, all images buildable.
 
-`craterun package --consumer` runs all checks as a hard gate before building.
+`bento package --consumer` runs all checks as a hard gate before building.
 Failures exit with clear per-check output and a suggestion to use Dev Pack mode.

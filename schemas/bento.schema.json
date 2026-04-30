@@ -1,0 +1,123 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "Bento App Manifest",
+  "description": "Schema for bento.yml — maps Docker Compose services into desktop app concepts",
+  "type": "object",
+  "required": ["app", "compose", "window", "routes", "health"],
+  "properties": {
+    "app": {
+      "type": "object",
+      "required": ["id", "name", "version"],
+      "properties": {
+        "id": {
+          "type": "string",
+          "pattern": "^[a-zA-Z0-9_-]+\\.[a-zA-Z0-9_-]+(\\.[a-zA-Z0-9_-]+)*$",
+          "description": "Reverse-domain app identifier"
+        },
+        "name": {
+          "type": "string",
+          "description": "Human-readable app name"
+        },
+        "version": {
+          "type": "string",
+          "description": "App version"
+        },
+        "icon": {
+          "type": "string",
+          "description": "Path to app icon (PNG)"
+        }
+      }
+    },
+    "compose": {
+      "type": "object",
+      "required": ["file"],
+      "properties": {
+        "file": {
+          "type": "string",
+          "description": "Path to docker-compose.yml"
+        },
+        "projectName": {
+          "type": "string",
+          "description": "Compose project name"
+        }
+      }
+    },
+    "window": {
+      "type": "object",
+      "required": ["title"],
+      "properties": {
+        "title": { "type": "string" },
+        "width": { "type": "integer", "default": 1200 },
+        "height": { "type": "integer", "default": 800 },
+        "entry": { "type": "string", "default": "/" }
+      }
+    },
+    "routes": {
+      "type": "object",
+      "additionalProperties": {
+        "type": "object",
+        "required": ["service", "port"],
+        "properties": {
+          "service": { "type": "string" },
+          "port": { "type": "integer" }
+        }
+      }
+    },
+    "health": {
+      "type": "object",
+      "required": ["ready"],
+      "properties": {
+        "ready": {
+          "type": "object",
+          "required": ["service", "path"],
+          "properties": {
+            "service": { "type": "string" },
+            "path": { "type": "string" },
+            "timeoutSeconds": { "type": "integer", "default": 120 },
+            "intervalSeconds": { "type": "integer", "default": 2 }
+          }
+        }
+      }
+    },
+    "volumes": {
+      "type": "object",
+      "additionalProperties": {
+        "type": "object",
+        "properties": {
+          "durability": {
+            "type": "string",
+            "enum": ["persistent", "disposable"],
+            "default": "persistent"
+          },
+          "backup": { "type": "boolean", "default": false }
+        }
+      }
+    },
+    "lifecycle": {
+      "type": "object",
+      "properties": {
+        "onWindowOpen": {
+          "type": "string",
+          "enum": ["startServices", "nothing"],
+          "default": "startServices"
+        },
+        "onWindowClose": {
+          "type": "string",
+          "enum": ["stopServices", "nothing"],
+          "default": "stopServices"
+        }
+      }
+    },
+    "install": {
+      "type": "object",
+      "properties": {
+        "mode": {
+          "type": "string",
+          "enum": ["consumer", "devPack"],
+          "default": "consumer"
+        },
+        "askQuestions": { "type": "boolean", "default": false }
+      }
+    }
+  }
+}

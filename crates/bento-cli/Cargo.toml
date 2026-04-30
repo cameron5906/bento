@@ -1,0 +1,23 @@
+[package]
+name = "bento-cli"
+version.workspace = true
+edition.workspace = true
+
+[[bin]]
+name = "bento"
+path = "src/main.rs"
+
+[dependencies]
+bento-core = { path = "../bento-core" }
+bento-bundle = { path = "../bento-bundle" }
+bento-runtime = { path = "../bento-runtime" }
+clap = { version = "4", features = ["derive"] }
+tokio = { workspace = true }
+serde = { workspace = true }
+serde_json = { workspace = true }
+serde_yaml = { workspace = true }
+anyhow = "1"
+console = "0.15"
+indicatif = "0.17"
+tracing = { workspace = true }
+indexmap = { workspace = true }

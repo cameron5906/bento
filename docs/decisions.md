@@ -12,7 +12,7 @@ Decisions made during implementation, with rationale. Referenced from CLAUDE.md.
 
 ## ADR-002: Supervisor as child process of shell (not Windows service)
 
-**Decision:** The Tauri shell spawns `craterun-supervisor.exe` as a child process.
+**Decision:** The Tauri shell spawns `bento-supervisor.exe` as a child process.
 
 **Rationale:** Windows services require admin rights to install. Per-user install with no elevation is a hard product requirement. A child process requires nothing special. If the shell crashes, the supervisor keeps containers alive — the user relaunches the shell and it reconnects via `supervisor.sock.json`.
 
@@ -24,11 +24,11 @@ Decisions made during implementation, with rationale. Referenced from CLAUDE.md.
 
 **Rationale:** Named pipes are more secure on Windows but harder to debug and not cross-platform. Loopback HTTP with NTFS-protected token file achieves equivalent security. Trivial to implement with axum. Easy to curl during development.
 
-**Token file:** `%LOCALAPPDATA%\CrateRun\Apps\<appId>\config\supervisor.sock.json`
+**Token file:** `%LOCALAPPDATA%\Bento\Apps\<appId>\config\supervisor.sock.json`
 
 ## ADR-004: Per-app WSL distro isolation
 
-**Decision:** Each installed app gets its own WSL2 distro named `craterun-<appId>`.
+**Decision:** Each installed app gets its own WSL2 distro named `bento-<appId>`.
 
 **Rationale:** Isolates apps from each other. Enables clean uninstall via `wsl --unregister`. Avoids version conflicts between apps needing different containerd versions. Trade-off is disk space (~200MB base per app) but this is the correct isolation model for consumer apps.
 
@@ -40,13 +40,13 @@ Decisions made during implementation, with rationale. Referenced from CLAUDE.md.
 
 ## ADR-006: Consumer subset validator as a hard gate
 
-**Decision:** `craterun certify` and `craterun package --consumer` reject Compose files with unsafe features.
+**Decision:** `bento certify` and `bento package --consumer` reject Compose files with unsafe features.
 
 **Rationale:** If developers can package arbitrary Compose files, the consumer experience and security model break. The validator blocks privileged containers, host networking, Docker socket mounts, fixed host ports, and other unsafe patterns. Dev Pack mode exists as an escape hatch for developers who need those features.
 
 ## ADR-007: Error translation as a single choke point
 
-**Decision:** All `CrateRunError` → `UserFacingError` conversion happens in one `impl From` block in `craterun-core/src/error.rs`.
+**Decision:** All `BentoError` → `UserFacingError` conversion happens in one `impl From` block in `bento-core/src/error.rs`.
 
 **Rationale:** Consumer-facing error messages are a product surface, not an afterthought. A single conversion point ensures every infrastructure error has a human translation. No other code path is allowed to construct `user_title` or `user_message` directly.
 
@@ -82,4 +82,4 @@ Decisions made during implementation, with rationale. Referenced from CLAUDE.md.
 
 **Decision:** Use the `dirs` crate for platform-appropriate data directories instead of hardcoded `%LOCALAPPDATA%`.
 
-**Rationale:** `dirs` provides XDG-compliant paths on Linux, `~/Library/Application Support` on macOS, and `%LOCALAPPDATA%` on Windows — all from a single API with no async dependencies. This keeps `craterun-core` sync-only while supporting all platforms correctly.
+**Rationale:** `dirs` provides XDG-compliant paths on Linux, `~/Library/Application Support` on macOS, and `%LOCALAPPDATA%` on Windows — all from a single API with no async dependencies. This keeps `bento-core` sync-only while supporting all platforms correctly.

@@ -1,17 +1,17 @@
 [package]
-name = "craterun-shell"
+name = "bento-shell"
 version = "0.1.0"
 edition = "2021"
 
 [lib]
-name = "craterun_shell_lib"
+name = "bento_shell_lib"
 crate-type = ["staticlib", "cdylib", "rlib"]
 
 [build-dependencies]
 tauri-build = { version = "2", features = [] }
 
 [dependencies]
-craterun-core = { path = "../../../crates/craterun-core" }
+bento-core = { path = "../../../crates/bento-core" }
 tauri = { version = "2", features = [] }
 tauri-plugin-shell = "2"
 serde = { version = "1", features = ["derive"] }

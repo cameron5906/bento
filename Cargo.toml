@@ -1,11 +1,11 @@
 [workspace]
 resolver = "2"
 members = [
-    "crates/craterun-core",
-    "crates/craterun-bundle",
-    "crates/craterun-runtime",
-    "crates/craterun-supervisor",
-    "crates/craterun-cli",
+    "crates/bento-core",
+    "crates/bento-bundle",
+    "crates/bento-runtime",
+    "crates/bento-supervisor",
+    "crates/bento-cli",
     "apps/shell-tauri/src-tauri",
 ]
 

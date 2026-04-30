@@ -1,0 +1,13 @@
+[package]
+name = "bento-core"
+version.workspace = true
+edition.workspace = true
+
+[dependencies]
+serde = { workspace = true }
+serde_json = { workspace = true }
+thiserror = { workspace = true }
+uuid = { workspace = true }
+semver = { workspace = true }
+indexmap = { workspace = true }
+dirs = { workspace = true }

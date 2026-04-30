@@ -1,6 +1,6 @@
 use reqwest::Client;
 
-use craterun_core::types::StatusResponse;
+use bento_core::types::StatusResponse;
 
 pub struct SupervisorClient {
     client: Client,
