@@ -1,6 +1,4 @@
 const http = require("http");
-const fs = require("fs");
-const path = require("path");
 
 const PORT = 3000;
 
@@ -26,13 +24,13 @@ const html = `<!DOCTYPE html>
       border: 1px solid #333;
       border-radius: 12px;
       padding: 48px;
-      max-width: 500px;
+      max-width: 520px;
       text-align: center;
       box-shadow: 0 8px 32px rgba(0,0,0,0.4);
     }
     h1 { font-size: 28px; margin-bottom: 12px; color: #fff; }
     p { color: #999; margin-bottom: 24px; line-height: 1.6; }
-    .status { font-size: 14px; color: #666; }
+    .status { font-size: 14px; color: #666; margin-top: 16px; }
     .status.ok { color: #22c55e; }
     .status.err { color: #ef4444; }
     button {
@@ -43,20 +41,75 @@ const html = `<!DOCTYPE html>
       border-radius: 6px;
       font-size: 14px;
       cursor: pointer;
-      margin-bottom: 16px;
+      margin: 4px;
     }
     button:hover { background: #4f46e5; }
+    button.secondary {
+      background: #333;
+      border: 1px solid #555;
+    }
+    button.secondary:hover { background: #444; }
+    .counter {
+      font-size: 64px;
+      font-weight: 700;
+      color: #6366f1;
+      margin: 24px 0;
+    }
+    .counter-label {
+      font-size: 13px;
+      color: #666;
+      margin-bottom: 20px;
+    }
   </style>
 </head>
 <body>
   <div class="card">
     <h1>Hello Web API</h1>
-    <p>This app was packaged with CrateRun.<br>
-    It runs a web frontend, a Node API, and a Postgres database — all inside containers.</p>
-    <button onclick="checkHealth()">Check API Health</button>
-    <div id="status" class="status">Click the button to check the API.</div>
+    <p>Packaged with CrateRun. Running a web frontend, Node API, and Postgres database inside containers.</p>
+    <div class="counter" id="count">-</div>
+    <div class="counter-label">Persisted in Postgres &mdash; survives app restarts</div>
+    <div>
+      <button onclick="increment()">+ Increment</button>
+      <button class="secondary" onclick="decrement()">- Decrement</button>
+    </div>
+    <button class="secondary" style="margin-top: 12px" onclick="checkHealth()">Check API Health</button>
+    <div id="status" class="status"></div>
   </div>
   <script>
+    loadCount();
+
+    async function loadCount() {
+      try {
+        const res = await fetch('/api/count');
+        const data = await res.json();
+        document.getElementById('count').textContent = data.value;
+      } catch (e) {
+        document.getElementById('count').textContent = '?';
+      }
+    }
+
+    async function increment() {
+      try {
+        const res = await fetch('/api/count/increment', { method: 'POST' });
+        const data = await res.json();
+        document.getElementById('count').textContent = data.value;
+      } catch (e) {
+        document.getElementById('status').textContent = 'Error: ' + e.message;
+        document.getElementById('status').className = 'status err';
+      }
+    }
+
+    async function decrement() {
+      try {
+        const res = await fetch('/api/count/decrement', { method: 'POST' });
+        const data = await res.json();
+        document.getElementById('count').textContent = data.value;
+      } catch (e) {
+        document.getElementById('status').textContent = 'Error: ' + e.message;
+        document.getElementById('status').className = 'status err';
+      }
+    }
+
     async function checkHealth() {
       const el = document.getElementById('status');
       el.className = 'status';
@@ -65,7 +118,7 @@ const html = `<!DOCTYPE html>
         const res = await fetch('/api/health');
         const data = await res.json();
         el.className = 'status ok';
-        el.textContent = 'API is healthy: ' + JSON.stringify(data);
+        el.textContent = 'API healthy, DB connected';
       } catch (e) {
         el.className = 'status err';
         el.textContent = 'API unreachable: ' + e.message;

@@ -6,11 +6,29 @@ const DATABASE_URL = process.env.DATABASE_URL || "postgres://postgres:postgres@d
 
 const pool = new Pool({ connectionString: DATABASE_URL });
 
+async function ensureSchema() {
+  await pool.query(`
+    CREATE TABLE IF NOT EXISTS app_counter (
+      id INTEGER PRIMARY KEY DEFAULT 1,
+      value INTEGER NOT NULL DEFAULT 0,
+      updated_at TIMESTAMPTZ DEFAULT NOW()
+    )
+  `);
+  await pool.query(`
+    INSERT INTO app_counter (id, value) VALUES (1, 0)
+    ON CONFLICT (id) DO NOTHING
+  `);
+}
+
+ensureSchema().catch(err => {
+  console.error("Schema init failed (will retry on first request):", err.message);
+});
+
 const server = http.createServer(async (req, res) => {
   res.setHeader("Content-Type", "application/json");
 
-  if (req.url === "/health") {
-    try {
+  try {
+    if (req.url === "/health") {
       const result = await pool.query("SELECT 1 as ok");
       res.writeHead(200);
       res.end(JSON.stringify({
@@ -18,38 +36,43 @@ const server = http.createServer(async (req, res) => {
         database: "connected",
         timestamp: new Date().toISOString(),
       }));
-    } catch (e) {
-      res.writeHead(503);
-      res.end(JSON.stringify({
-        status: "unhealthy",
-        database: "disconnected",
-        error: e.message,
-      }));
+      return;
     }
-    return;
-  }
 
-  if (req.url === "/items" && req.method === "GET") {
-    try {
-      await pool.query(`
-        CREATE TABLE IF NOT EXISTS items (
-          id SERIAL PRIMARY KEY,
-          name TEXT NOT NULL,
-          created_at TIMESTAMPTZ DEFAULT NOW()
-        )
-      `);
-      const result = await pool.query("SELECT * FROM items ORDER BY created_at DESC LIMIT 50");
+    if (req.url === "/count" && req.method === "GET") {
+      await ensureSchema();
+      const result = await pool.query("SELECT value FROM app_counter WHERE id = 1");
       res.writeHead(200);
-      res.end(JSON.stringify(result.rows));
-    } catch (e) {
-      res.writeHead(500);
-      res.end(JSON.stringify({ error: e.message }));
+      res.end(JSON.stringify({ value: result.rows[0]?.value ?? 0 }));
+      return;
     }
-    return;
-  }
 
-  res.writeHead(404);
-  res.end(JSON.stringify({ error: "not found" }));
+    if (req.url === "/count/increment" && req.method === "POST") {
+      await ensureSchema();
+      const result = await pool.query(
+        "UPDATE app_counter SET value = value + 1, updated_at = NOW() WHERE id = 1 RETURNING value"
+      );
+      res.writeHead(200);
+      res.end(JSON.stringify({ value: result.rows[0].value }));
+      return;
+    }
+
+    if (req.url === "/count/decrement" && req.method === "POST") {
+      await ensureSchema();
+      const result = await pool.query(
+        "UPDATE app_counter SET value = value - 1, updated_at = NOW() WHERE id = 1 RETURNING value"
+      );
+      res.writeHead(200);
+      res.end(JSON.stringify({ value: result.rows[0].value }));
+      return;
+    }
+
+    res.writeHead(404);
+    res.end(JSON.stringify({ error: "not found" }));
+  } catch (e) {
+    res.writeHead(500);
+    res.end(JSON.stringify({ error: e.message }));
+  }
 });
 
 server.listen(PORT, () => {

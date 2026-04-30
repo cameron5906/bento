@@ -53,6 +53,10 @@ async fn main() -> anyhow::Result<()> {
         token: token.clone(),
     };
 
+    // Keep a handle to the adapter for shutdown cleanup
+    let shutdown_adapter = adapter.clone();
+    let shutdown_app_id = app_id.clone();
+
     let engine = SupervisorEngine::new(
         app_id,
         manifest,
@@ -70,12 +74,30 @@ async fn main() -> anyhow::Result<()> {
 
     let listener = tokio::net::TcpListener::bind(format!("127.0.0.1:{}", api_port)).await?;
     let router = api::router(api_state);
-    axum::serve(listener, router)
+
+    // Graceful shutdown: stop containers when the supervisor exits.
+    // The shell kills the supervisor (kill_on_drop) when the window closes,
+    // and ctrl_c catches manual termination during development.
+    let server = axum::serve(listener, router)
+        .with_graceful_shutdown(shutdown_signal());
+
+    server
         .await
         .map_err(|e| anyhow::anyhow!("server error: {}", e))?;
 
+    // Cleanup: stop all containers for this app
+    tracing::info!("Shutting down — stopping containers");
+    let _ = shutdown_adapter.stop_app(&shutdown_app_id).await;
+
     engine_handle.abort();
     Ok(())
+}
+
+async fn shutdown_signal() {
+    tokio::signal::ctrl_c()
+        .await
+        .expect("failed to install ctrl+c handler");
+    tracing::info!("Received shutdown signal");
 }
 
 fn allocate_port() -> anyhow::Result<u16> {
