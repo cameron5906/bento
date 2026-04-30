@@ -46,6 +46,12 @@ cargo test                     # Run all tests
 cargo run -p craterun-cli      # Run the CLI
 ```
 
+## Tracking
+
+- **[docs/decisions.md](docs/decisions.md)** — Architecture Decision Records (ADRs). All non-obvious decisions with rationale.
+- **[docs/milestones.md](docs/milestones.md)** — Milestone tracker with status, commits, and definition of done.
+- **[DOC.pdf](DOC.pdf)** — Original 39-page implementation brief (the spec).
+
 ## Design Rules
 
 - Manifest is app-oriented, not infrastructure-oriented (`routes` not `hostPort`)
