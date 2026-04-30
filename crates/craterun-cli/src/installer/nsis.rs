@@ -119,6 +119,10 @@ InstallDir "$LOCALAPPDATA\Programs\{app_name}"
 !insertmacro MUI_LANGUAGE "English"
 
 Section "Install"
+    ;; Kill any running instances before overwriting binaries
+    nsExec::ExecToLog 'taskkill /F /IM {app_exe}'
+    nsExec::ExecToLog 'taskkill /F /IM {app_id}-supervisor.exe'
+
     SetOutPath "$INSTDIR"
 
     ;; App shell and supervisor binaries
@@ -165,6 +169,11 @@ FunctionEnd
 
 ;; Uninstaller
 Section "Uninstall"
+    ;; Stop running processes before removing files
+    nsExec::ExecToLog 'taskkill /F /IM {app_exe}'
+    nsExec::ExecToLog 'taskkill /F /IM {app_id}-supervisor.exe'
+    Sleep 1000
+
     ;; Remove app files
     RMDir /r "$INSTDIR\bundle"
     Delete "$INSTDIR\{app_exe}"
