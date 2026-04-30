@@ -1,0 +1,14 @@
+[package]
+name = "craterun-runtime"
+version.workspace = true
+edition.workspace = true
+
+[dependencies]
+craterun-core = { path = "../craterun-core" }
+async-trait = { workspace = true }
+tokio = { workspace = true }
+serde = { workspace = true }
+serde_json = { workspace = true }
+tracing = { workspace = true }
+indexmap = { workspace = true }
+which = "7"

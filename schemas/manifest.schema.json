@@ -1,0 +1,116 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "CrateRun Compiled Manifest",
+  "description": "Schema for manifest.json inside .appcrate bundles",
+  "type": "object",
+  "required": ["schemaVersion", "app", "runtime", "services", "routes", "health"],
+  "properties": {
+    "schemaVersion": { "type": "string" },
+    "app": {
+      "type": "object",
+      "required": ["id", "name", "version"],
+      "properties": {
+        "id": { "type": "string" },
+        "name": { "type": "string" },
+        "version": { "type": "string" }
+      }
+    },
+    "runtime": {
+      "type": "object",
+      "required": ["target", "architecture"],
+      "properties": {
+        "target": { "type": "string" },
+        "architecture": { "type": "string" }
+      }
+    },
+    "services": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": ["name", "imageArchive", "containerPort", "role"],
+        "properties": {
+          "name": { "type": "string" },
+          "imageArchive": { "type": "string" },
+          "imageDigest": { "type": "string" },
+          "containerPort": { "type": "integer" },
+          "role": {
+            "type": "string",
+            "enum": ["frontend", "backend", "worker", "database"]
+          },
+          "env": {
+            "type": "object",
+            "additionalProperties": { "type": "string" }
+          },
+          "dependsOn": {
+            "type": "array",
+            "items": { "type": "string" }
+          },
+          "restartPolicy": {
+            "type": "string",
+            "enum": ["no", "always", "onFailure", "unlessStopped"]
+          }
+        }
+      }
+    },
+    "routes": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": ["path", "service", "port"],
+        "properties": {
+          "path": { "type": "string" },
+          "service": { "type": "string" },
+          "port": { "type": "integer" }
+        }
+      }
+    },
+    "health": {
+      "type": "object",
+      "required": ["ready"],
+      "properties": {
+        "ready": {
+          "type": "object",
+          "required": ["service", "path", "timeoutSeconds"],
+          "properties": {
+            "service": { "type": "string" },
+            "path": { "type": "string" },
+            "timeoutSeconds": { "type": "integer" }
+          }
+        }
+      }
+    },
+    "volumes": {
+      "type": "object",
+      "additionalProperties": {
+        "type": "object",
+        "properties": {
+          "durability": { "type": "string" },
+          "backup": { "type": "boolean" }
+        }
+      }
+    },
+    "window": {
+      "type": "object",
+      "properties": {
+        "title": { "type": "string" },
+        "width": { "type": "integer" },
+        "height": { "type": "integer" },
+        "entry": { "type": "string" }
+      }
+    },
+    "lifecycle": {
+      "type": "object",
+      "properties": {
+        "onWindowOpen": { "type": "string" },
+        "onWindowClose": { "type": "string" }
+      }
+    },
+    "install": {
+      "type": "object",
+      "properties": {
+        "mode": { "type": "string" },
+        "askQuestions": { "type": "boolean" }
+      }
+    }
+  }
+}
