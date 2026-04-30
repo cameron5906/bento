@@ -4,7 +4,13 @@ pub async fn run() -> anyhow::Result<()> {
     output::header("CrateRun Doctor");
 
     check_docker().await;
+
+    #[cfg(windows)]
     check_wsl().await;
+
+    #[cfg(target_os = "linux")]
+    check_podman().await;
+
     check_craterun_yml();
 
     println!();
@@ -26,6 +32,7 @@ async fn check_docker() {
     }
 }
 
+#[cfg(windows)]
 async fn check_wsl() {
     let result = craterun_runtime::detect::detect_wsl().await;
     if result.available {
@@ -33,6 +40,19 @@ async fn check_wsl() {
     } else {
         let msg = result.blocker.unwrap_or_else(|| "not available".into());
         output::info(&format!("WSL2: {} (only required for consumer builds)", msg));
+    }
+}
+
+#[cfg(target_os = "linux")]
+async fn check_podman() {
+    let result = craterun_runtime::detect::detect_podman().await;
+    if result.available {
+        output::success(&format!(
+            "Podman: available ({})",
+            result.version.unwrap_or_else(|| "unknown".into())
+        ));
+    } else {
+        output::info("Podman: not found (Docker is sufficient)");
     }
 }
 

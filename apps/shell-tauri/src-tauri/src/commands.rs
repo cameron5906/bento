@@ -37,21 +37,21 @@ pub async fn launch_supervisor(
 
     // Read app ID first so we can clean up stale state before launching
     let manifest_path = bundle_path.join("manifest.json");
-    let app_id = if manifest_path.exists() {
+    let (app_id, app_name) = if manifest_path.exists() {
         let content = std::fs::read_to_string(&manifest_path)
             .map_err(|e| format!("failed to read manifest: {}", e))?;
         let manifest: serde_json::Value = serde_json::from_str(&content)
             .map_err(|e| format!("failed to parse manifest: {}", e))?;
-        manifest["app"]["id"]
-            .as_str()
-            .unwrap_or("unknown")
-            .to_string()
+        (
+            manifest["app"]["id"].as_str().unwrap_or("unknown").to_string(),
+            manifest["app"]["name"].as_str().unwrap_or("App").to_string(),
+        )
     } else {
-        "unknown".to_string()
+        ("unknown".to_string(), "App".to_string())
     };
 
     // Delete stale sock file so we only read the fresh one from the new supervisor
-    let sock_path = supervisor_sock_path(&app_id);
+    let sock_path = supervisor_sock_path(&app_id, &app_name);
     let _ = std::fs::remove_file(&sock_path);
 
     let child = tokio::process::Command::new(&supervisor_path)
@@ -131,27 +131,31 @@ pub async fn send_command(
 }
 
 fn find_supervisor(exe_dir: &std::path::Path) -> PathBuf {
-    // Look for any *-supervisor.exe or craterun-supervisor.exe next to the shell
+    #[cfg(windows)]
+    let suffixes = ["-supervisor.exe", "craterun-supervisor.exe"];
+    #[cfg(not(windows))]
+    let suffixes = ["-supervisor", "craterun-supervisor"];
+
     for entry in std::fs::read_dir(exe_dir).into_iter().flatten() {
         if let Ok(e) = entry {
             let name = e.file_name().to_string_lossy().to_string();
-            if name.ends_with("-supervisor.exe") || name == "craterun-supervisor.exe" {
+            if suffixes.iter().any(|s| name.ends_with(s)) {
                 return e.path();
             }
         }
     }
-    exe_dir.join("craterun-supervisor.exe")
+
+    #[cfg(windows)]
+    return exe_dir.join("craterun-supervisor.exe");
+    #[cfg(not(windows))]
+    return exe_dir.join("craterun-supervisor");
 }
 
-fn supervisor_sock_path(app_id: &str) -> PathBuf {
-    let local_app_data = std::env::var("LOCALAPPDATA")
-        .unwrap_or_else(|_| "C:\\Users\\Default\\AppData\\Local".into());
-    PathBuf::from(local_app_data)
-        .join("CrateRun")
-        .join("Apps")
-        .join(app_id)
-        .join("config")
-        .join("supervisor.sock.json")
+fn supervisor_sock_path(app_id: &str, app_name: &str) -> PathBuf {
+    let id = craterun_core::AppId::new(app_id)
+        .unwrap_or_else(|_| craterun_core::AppId::new("com.craterun.unknown").unwrap());
+    let paths = craterun_core::paths::AppPaths::new(id, app_name.to_string());
+    paths.supervisor_sock_file()
 }
 
 async fn wait_for_sock_file(path: &std::path::Path) -> Result<SupervisorSockInfo, String> {

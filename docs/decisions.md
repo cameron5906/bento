@@ -63,3 +63,23 @@ Decisions made during implementation, with rationale. Referenced from CLAUDE.md.
 **Rationale:** Docker Desktop introduces licensing, account, install, startup, update, and UX friction. End users should not install Docker to run a normal app. A managed WSL2 distro with containerd is invisible to the user and fully controllable by the supervisor. The `wsl --import` command works per-user without admin rights.
 
 **Risk:** This is the highest-risk technical decision. Potential blockers: virtualization disabled, WSL not installed, Windows feature requires reboot, enterprise policy, Defender interference.
+
+## ADR-010: macOS and Linux use ExistingDockerAdapter (no managed VM for M9)
+
+**Decision:** On macOS and Linux, the consumer runtime uses `ExistingDockerAdapter` (requires Docker Desktop, OrbStack, or Podman). No managed VM adapter (Lima, Colima) for the initial cross-platform release.
+
+**Rationale:** Creating a Lima/Colima adapter would require solving the same WSL-class problems (VM provisioning, bootstrap scripts, distro management) with no prototype validation benefit. Docker Desktop is widely installed on developer machines. A Lima adapter can be an M10 item with its own ADR.
+
+**Trade-off:** macOS/Linux consumer installs require Docker to be pre-installed. This violates the "user should never know Docker exists" principle for those platforms. Acceptable for prototype; the managed VM adapter is the path to fixing it.
+
+## ADR-011: Tauri native packaging for macOS (.dmg) and Linux (.deb/.AppImage)
+
+**Decision:** Use `cargo tauri build` for macOS and Linux packaging instead of writing bespoke tooling.
+
+**Rationale:** Tauri natively produces `.app` + `.dmg` on macOS and `.deb` + `.AppImage` on Linux. It handles the platform-specific bundle structure, code signing (even ad-hoc), and resource embedding. Writing a custom `.plist` generator or AppImage recipe would be reinventing the wheel.
+
+## ADR-012: Platform path resolution via `dirs` crate
+
+**Decision:** Use the `dirs` crate for platform-appropriate data directories instead of hardcoded `%LOCALAPPDATA%`.
+
+**Rationale:** `dirs` provides XDG-compliant paths on Linux, `~/Library/Application Support` on macOS, and `%LOCALAPPDATA%` on Windows — all from a single API with no async dependencies. This keeps `craterun-core` sync-only while supporting all platforms correctly.

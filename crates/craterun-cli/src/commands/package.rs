@@ -12,8 +12,8 @@ pub struct PackageArgs {
     #[arg(long)]
     pub consumer: bool,
 
-    /// Target platform
-    #[arg(long, default_value = "windows-x64")]
+    /// Target platform (auto-detected from current OS)
+    #[arg(long, default_value_t = crate::platform::default_build_target())]
     pub target: String,
 
     /// Path to craterun.yml
@@ -84,8 +84,41 @@ pub async fn run(args: PackageArgs) -> anyhow::Result<()> {
                 }
             }
         }
+    } else if args.consumer
+        && (args.target.starts_with("macos") || args.target.starts_with("linux"))
+    {
+        output::info(&format!(
+            "Building native package for {} via Tauri...",
+            args.target
+        ));
+
+        let reader = BundleReader::new(&bundle_dir);
+        let manifest = reader.read_manifest()?;
+
+        let packager = crate::installer::tauri_package::TauriPackager::new(
+            manifest,
+            bundle_dir.clone(),
+            args.output.clone(),
+        )?;
+
+        if args.script_only {
+            packager.stage_bundle()?;
+            packager.stage_supervisor()?;
+            output::info("--script-only: staged bundle and supervisor. Run `cargo tauri build` manually.");
+        } else {
+            match packager.run(&args.target).await {
+                Ok(artifacts) => {
+                    for a in &artifacts {
+                        output::success(&format!("Artifact: {}", a.display()));
+                    }
+                }
+                Err(e) => {
+                    output::failure(&format!("Tauri build failed: {}", e));
+                }
+            }
+        }
     } else if args.consumer {
-        output::info("Installer generation is only supported for windows targets.");
+        output::failure(&format!("Unsupported target: {}", args.target));
     }
 
     output::success("Package complete.");

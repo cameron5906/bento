@@ -21,8 +21,8 @@ pub struct BuildArgs {
     #[arg(short, long, default_value = "./dist/bundle")]
     pub output: PathBuf,
 
-    /// Target platform
-    #[arg(long, default_value = "windows-x64")]
+    /// Target platform (auto-detected from current OS)
+    #[arg(long, default_value_t = crate::platform::default_build_target())]
     pub target: String,
 
     /// Skip image build/export (only generate manifest)

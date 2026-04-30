@@ -3,6 +3,7 @@ mod cli;
 mod commands;
 mod installer;
 mod output;
+pub mod platform;
 
 use clap::Parser;
 use cli::{Cli, Commands};

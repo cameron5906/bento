@@ -12,12 +12,32 @@ impl AppPaths {
         Self { app_id, app_name }
     }
 
+    /// Where the app binaries and bundle are installed.
+    /// - Windows: %LOCALAPPDATA%\Programs\<AppName>
+    /// - macOS:   ~/Applications/<AppName>
+    /// - Linux:   ~/.local/share/Programs/<AppName>
     pub fn install_dir(&self) -> PathBuf {
-        local_app_data().join("Programs").join(&self.app_name)
+        #[cfg(target_os = "macos")]
+        {
+            dirs::home_dir()
+                .unwrap_or_else(|| PathBuf::from("/tmp"))
+                .join("Applications")
+                .join(&self.app_name)
+        }
+        #[cfg(not(target_os = "macos"))]
+        {
+            data_local_dir()
+                .join("Programs")
+                .join(&self.app_name)
+        }
     }
 
+    /// Where app runtime state, volumes, logs, and config live.
+    /// - Windows: %LOCALAPPDATA%\CrateRun\Apps\<appId>
+    /// - macOS:   ~/Library/Application Support/CrateRun/Apps/<appId>
+    /// - Linux:   ~/.local/share/CrateRun/Apps/<appId>
     pub fn data_dir(&self) -> PathBuf {
-        local_app_data()
+        data_local_dir()
             .join("CrateRun")
             .join("Apps")
             .join(self.app_id.as_str())
@@ -56,25 +76,23 @@ impl AppPaths {
     }
 }
 
-fn local_app_data() -> PathBuf {
-    std::env::var("LOCALAPPDATA")
-        .map(PathBuf::from)
-        .unwrap_or_else(|_| {
-            dirs_fallback()
-        })
-}
-
-fn dirs_fallback() -> PathBuf {
-    #[cfg(windows)]
-    {
-        PathBuf::from(std::env::var("USERPROFILE").unwrap_or_else(|_| "C:\\Users\\Default".into()))
-            .join("AppData")
-            .join("Local")
-    }
-    #[cfg(not(windows))]
-    {
-        PathBuf::from(std::env::var("HOME").unwrap_or_else(|_| "/tmp".into()))
-            .join(".local")
-            .join("share")
-    }
+/// Platform-appropriate local data directory via the `dirs` crate.
+/// Falls back to reasonable defaults if the directory cannot be determined.
+fn data_local_dir() -> PathBuf {
+    dirs::data_local_dir().unwrap_or_else(|| {
+        #[cfg(windows)]
+        {
+            PathBuf::from(
+                std::env::var("LOCALAPPDATA")
+                    .unwrap_or_else(|_| "C:\\Users\\Default\\AppData\\Local".into()),
+            )
+        }
+        #[cfg(not(windows))]
+        {
+            dirs::home_dir()
+                .unwrap_or_else(|| PathBuf::from("/tmp"))
+                .join(".local")
+                .join("share")
+        }
+    })
 }
