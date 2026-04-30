@@ -6,6 +6,7 @@ members = [
     "crates/craterun-runtime",
     "crates/craterun-supervisor",
     "crates/craterun-cli",
+    "apps/shell-tauri/src-tauri",
 ]
 
 [workspace.package]
