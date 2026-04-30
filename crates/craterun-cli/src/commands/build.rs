@@ -107,7 +107,9 @@ pub async fn run(args: BuildArgs) -> anyhow::Result<()> {
             ServiceEntry {
                 name: name.clone(),
                 image_tag: build_result.map(|r| r.image_tag.clone()),
-                image_archive: format!("images/{}-linux-amd64.oci.tar.zst", name),
+                image_archive: build_result
+                    .map(|r| r.archive_name.clone())
+                    .unwrap_or_else(|| format!("images/{}-linux-amd64.oci.tar.zst", name)),
                 image_digest: build_result.map(|r| r.digest.clone()),
                 container_port: port,
                 role: infer_role(name),

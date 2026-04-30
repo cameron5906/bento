@@ -20,6 +20,8 @@ pub struct ImageBuildResult {
     pub service_name: String,
     pub image_tag: String,
     pub digest: String,
+    /// Relative path inside the bundle (e.g. "images/web-linux-amd64.oci.tar")
+    pub archive_name: String,
     pub archive_path: PathBuf,
     pub archive_size: u64,
 }
@@ -134,6 +136,13 @@ pub async fn build_and_export(
     // Compress with zstd if available, otherwise keep the .tar
     let final_path = compress_with_zstd(&tar_path, &archive_path).await;
 
+    // Use the actual filename that was produced (may be .tar instead of .tar.zst)
+    let actual_archive_name = final_path
+        .file_name()
+        .unwrap_or_default()
+        .to_string_lossy()
+        .to_string();
+
     let archive_size = std::fs::metadata(&final_path)
         .map(|m| m.len())
         .unwrap_or(0);
@@ -142,6 +151,7 @@ pub async fn build_and_export(
         service_name: service_name.to_string(),
         image_tag,
         digest,
+        archive_name: format!("images/{}", actual_archive_name),
         archive_path: final_path,
         archive_size,
     })
