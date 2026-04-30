@@ -82,10 +82,20 @@ impl NsisInstaller {
         let exe_name = format!("{}Setup.exe", app_name.replace(' ', ""));
         let app_exe = format!("{}.exe", app_name.replace(' ', ""));
 
-        // NSIS uses backslashes for paths
-        let shell_exe = binaries.shell_exe.to_string_lossy().replace('/', "\\");
-        let supervisor_exe = binaries.supervisor_exe.to_string_lossy().replace('/', "\\");
-        let bundle_dir = self.bundle_dir.to_string_lossy().replace('/', "\\");
+        // NSIS requires absolute backslash paths
+        let abs = |p: &std::path::Path| -> String {
+            std::fs::canonicalize(p)
+                .unwrap_or_else(|_| p.to_path_buf())
+                .to_string_lossy()
+                .replace('/', "\\")
+                // Remove \\?\ prefix that canonicalize adds on Windows
+                .trim_start_matches(r"\\?\")
+                .to_string()
+        };
+        let shell_exe = abs(&binaries.shell_exe);
+        let supervisor_exe = abs(&binaries.supervisor_exe);
+        let bundle_dir = abs(&self.bundle_dir);
+        let output_dir = abs(&self.output_dir);
 
         format!(
             r#";; CrateRun-generated NSIS installer for {app_name}
@@ -94,7 +104,7 @@ impl NsisInstaller {
 !include "MUI2.nsh"
 
 Name "{app_name}"
-OutFile "{exe_name}"
+OutFile "{output_dir}\{exe_name}"
 Unicode True
 
 ;; Per-user install — no admin elevation needed
@@ -102,7 +112,6 @@ RequestExecutionLevel user
 InstallDir "$LOCALAPPDATA\Programs\{app_name}"
 
 ;; Installer UI
-!define MUI_ICON "{bundle_dir}\assets\icon.ico"
 !define MUI_ABORTWARNING
 
 ;; Pages: minimal consumer flow (install confirmation + progress)
