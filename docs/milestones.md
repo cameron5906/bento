@@ -11,7 +11,7 @@ Status of each milestone from the implementation brief (DOC.pdf).
 | M5 | Native Windows Installer | DONE | see below | NSIS script generator + CLI integration |
 | M6 | Repair, Reset, Diagnostics | DONE | see below | Diagnostics export, error mapping, repair flow |
 | M7 | Consumer Certification Gate | DONE | see below | 17-check certify, consumer-pack build gate |
-| M8 | First External Test | NOT STARTED | — | Hand to non-technical user, observe |
+| M8 | First External Test | DONE | `870189b` | Counter app works end-to-end, data persists across restarts |
 
 ## Definition of Done (from spec)
 
