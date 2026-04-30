@@ -134,9 +134,10 @@ async fn handle_connection(
         rewritten.extend_from_slice(b"\r\n");
     }
 
-    // Append remaining headers (skip the first line we already rewrote)
+    // Append remaining headers, replacing any Connection header with "close".
+    // This prevents HTTP keep-alive from reusing a connection across different
+    // route targets — each request must get its own connection and route match.
     let rest = &request_bytes[first_line.len()..];
-    // Skip the \n or \r\n after the first line
     let rest = if rest.starts_with(b"\r\n") {
         &rest[2..]
     } else if rest.starts_with(b"\n") {
@@ -144,7 +145,33 @@ async fn handle_connection(
     } else {
         rest
     };
-    rewritten.extend_from_slice(rest);
+
+    let rest_str = String::from_utf8_lossy(rest);
+    let mut wrote_connection = false;
+    for line in rest_str.split("\r\n") {
+        if line.is_empty() {
+            if !wrote_connection {
+                rewritten.extend_from_slice(b"Connection: close\r\n");
+            }
+            rewritten.extend_from_slice(b"\r\n");
+            break;
+        }
+        if line.to_lowercase().starts_with("connection:") {
+            rewritten.extend_from_slice(b"Connection: close\r\n");
+            wrote_connection = true;
+        } else {
+            rewritten.extend_from_slice(line.as_bytes());
+            rewritten.extend_from_slice(b"\r\n");
+        }
+    }
+
+    // Append any body after the headers
+    if let Some(body_start) = rest_str.find("\r\n\r\n") {
+        let body = &rest[body_start + 4..];
+        if !body.is_empty() {
+            rewritten.extend_from_slice(body);
+        }
+    }
 
     // Connect to the upstream container
     let upstream_addr = format!("127.0.0.1:{}", route.target_port);
