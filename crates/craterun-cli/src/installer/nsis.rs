@@ -119,10 +119,6 @@ InstallDir "$LOCALAPPDATA\Programs\{app_name}"
 !insertmacro MUI_LANGUAGE "English"
 
 Section "Install"
-    ;; Kill any running instances before overwriting binaries
-    ExecWait 'cmd.exe /C taskkill /F /IM "{app_exe}" 2>nul'
-    ExecWait 'cmd.exe /C taskkill /F /IM "{app_id}-supervisor.exe" 2>nul'
-
     SetOutPath "$INSTDIR"
 
     ;; App shell and supervisor binaries
@@ -169,11 +165,6 @@ FunctionEnd
 
 ;; Uninstaller
 Section "Uninstall"
-    ;; Stop running processes before removing files
-    ExecWait 'cmd.exe /C taskkill /F /IM "{app_exe}" 2>nul'
-    ExecWait 'cmd.exe /C taskkill /F /IM "{app_id}-supervisor.exe" 2>nul'
-    Sleep 1000
-
     ;; Remove app files
     RMDir /r "$INSTDIR\bundle"
     Delete "$INSTDIR\{app_exe}"
