@@ -120,8 +120,8 @@ InstallDir "$LOCALAPPDATA\Programs\{app_name}"
 
 Section "Install"
     ;; Kill any running instances before overwriting binaries
-    nsExec::ExecToLog 'taskkill /F /IM {app_exe}'
-    nsExec::ExecToLog 'taskkill /F /IM {app_id}-supervisor.exe'
+    ExecWait 'cmd.exe /C taskkill /F /IM "{app_exe}" 2>nul'
+    ExecWait 'cmd.exe /C taskkill /F /IM "{app_id}-supervisor.exe" 2>nul'
 
     SetOutPath "$INSTDIR"
 
@@ -170,8 +170,8 @@ FunctionEnd
 ;; Uninstaller
 Section "Uninstall"
     ;; Stop running processes before removing files
-    nsExec::ExecToLog 'taskkill /F /IM {app_exe}'
-    nsExec::ExecToLog 'taskkill /F /IM {app_id}-supervisor.exe'
+    ExecWait 'cmd.exe /C taskkill /F /IM "{app_exe}" 2>nul'
+    ExecWait 'cmd.exe /C taskkill /F /IM "{app_id}-supervisor.exe" 2>nul'
     Sleep 1000
 
     ;; Remove app files
