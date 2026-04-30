@@ -4,7 +4,17 @@ const { Pool } = require("pg");
 const PORT = 8080;
 const DATABASE_URL = process.env.DATABASE_URL || "postgres://postgres:postgres@db:5432/app";
 
-const pool = new Pool({ connectionString: DATABASE_URL });
+const pool = new Pool({
+  connectionString: DATABASE_URL,
+  // Retry connections — the db container may still be starting
+  connectionTimeoutMillis: 5000,
+  idleTimeoutMillis: 30000,
+});
+
+// Prevent unhandled pool errors from crashing the process
+pool.on("error", (err) => {
+  console.error("Postgres pool error (non-fatal):", err.message);
+});
 
 async function ensureSchema() {
   await pool.query(`
