@@ -96,27 +96,52 @@ pub async fn run(args: PackageArgs) -> anyhow::Result<()> {
 /// Falls back to placeholder paths if not found (the .nsi script is still
 /// generated and can be edited before compilation).
 fn locate_binaries() -> anyhow::Result<InstallerBinaries> {
-    let search_dirs = ["target/release", "target/debug"];
-
     let shell_names = ["craterun-shell.exe", "craterun_shell.exe"];
     let supervisor_names = ["craterun-supervisor.exe", "craterun_supervisor.exe"];
 
     let mut shell_exe = PathBuf::from("craterun-shell.exe");
     let mut supervisor_exe = PathBuf::from("craterun-supervisor.exe");
 
-    for dir in &search_dirs {
-        for name in &shell_names {
-            let path = PathBuf::from(dir).join(name);
-            if path.exists() {
-                shell_exe = path;
-                break;
-            }
+    // Walk up from CWD to find the workspace root (contains target/)
+    let mut search_roots = vec![PathBuf::from(".")];
+    if let Ok(cwd) = std::env::current_dir() {
+        let mut dir = cwd.as_path();
+        while let Some(parent) = dir.parent() {
+            search_roots.push(parent.to_path_buf());
+            dir = parent;
         }
-        for name in &supervisor_names {
-            let path = PathBuf::from(dir).join(name);
-            if path.exists() {
-                supervisor_exe = path;
-                break;
+    }
+
+    let mut found_shell = false;
+    let mut found_supervisor = false;
+
+    // Search release first, then debug. Stop once both are found.
+    'outer: for profile in &["release", "debug"] {
+        for root in &search_roots {
+            let target_dir = root.join("target").join(profile);
+            if !target_dir.exists() {
+                continue;
+            }
+            if !found_shell {
+                for name in &shell_names {
+                    let path = target_dir.join(name);
+                    if path.exists() {
+                        shell_exe = path;
+                        found_shell = true;
+                    }
+                }
+            }
+            if !found_supervisor {
+                for name in &supervisor_names {
+                    let path = target_dir.join(name);
+                    if path.exists() {
+                        supervisor_exe = path;
+                        found_supervisor = true;
+                    }
+                }
+            }
+            if found_shell && found_supervisor {
+                break 'outer;
             }
         }
     }
