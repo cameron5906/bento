@@ -242,10 +242,15 @@ impl SupervisorEngine {
                     })
                     .collect();
 
+                let image_name = svc
+                    .image_tag
+                    .clone()
+                    .unwrap_or_else(|| svc.name.clone());
+
                 PlannedService {
                     name: svc.name.clone(),
                     image_ref: ImageRef {
-                        name: svc.name.clone(),
+                        name: image_name,
                         digest: svc.image_digest.clone(),
                         archive_path: Some(svc.image_archive.clone()),
                     },

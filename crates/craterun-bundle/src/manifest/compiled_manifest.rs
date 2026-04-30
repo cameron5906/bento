@@ -41,6 +41,10 @@ pub struct RuntimeTarget {
 #[serde(rename_all = "camelCase")]
 pub struct ServiceEntry {
     pub name: String,
+    /// Docker image tag used during build (e.g. "hello-web-api-web:latest").
+    /// The supervisor uses this to run containers after importing from the archive.
+    #[serde(default)]
+    pub image_tag: Option<String>,
     pub image_archive: String,
     #[serde(default)]
     pub image_digest: Option<String>,

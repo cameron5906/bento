@@ -100,15 +100,15 @@ pub async fn run(args: BuildArgs) -> anyhow::Result<()> {
                 .and_then(|p| p.container_port())
                 .unwrap_or(0);
 
-            let digest = build_results
+            let build_result = build_results
                 .iter()
-                .find(|r| r.service_name == *name)
-                .map(|r| r.digest.clone());
+                .find(|r| r.service_name == *name);
 
             ServiceEntry {
                 name: name.clone(),
+                image_tag: build_result.map(|r| r.image_tag.clone()),
                 image_archive: format!("images/{}-linux-amd64.oci.tar.zst", name),
-                image_digest: digest,
+                image_digest: build_result.map(|r| r.digest.clone()),
                 container_port: port,
                 role: infer_role(name),
                 env: extract_env(svc),
