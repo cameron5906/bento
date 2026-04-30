@@ -103,6 +103,13 @@ async fn handle_connection(
         }
     };
 
+    tracing::debug!(
+        "proxy: {} -> 127.0.0.1:{} (matched prefix '{}')",
+        path,
+        route.target_port,
+        route.path_prefix,
+    );
+
     // Rewrite the path: strip the prefix for non-root routes
     let upstream_path = if route.path_prefix == "/" {
         path.to_string()
