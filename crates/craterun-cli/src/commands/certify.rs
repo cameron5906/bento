@@ -2,7 +2,7 @@ use std::path::PathBuf;
 
 use clap::Args;
 
-use craterun_bundle::compose::{validate_consumer_subset, ComposeFile};
+use craterun_bundle::compose::{validate_consumer_subset, BlockedRule, ComposeFile};
 use craterun_bundle::manifest::AppManifest;
 
 use crate::output;
@@ -29,44 +29,72 @@ pub async fn run(args: CertifyArgs) -> anyhow::Result<()> {
 
     let violations = validate_consumer_subset(&compose, &manifest);
 
-    let checks = vec![
-        ("app name configured", manifest.app.name.len() > 0),
+    // Helper: check if a specific rule triggered
+    let has_violation = |rule: BlockedRule| violations.iter().any(|v| v.rule == rule);
+
+    // Manifest-level checks (not covered by the compose validator)
+    let checks: Vec<(&str, bool)> = vec![
+        ("app name configured", !manifest.app.name.is_empty()),
+        ("app version configured", !manifest.app.version.is_empty()),
         ("icon configured", manifest.app.icon.is_some()),
         ("frontend route configured", !manifest.routes.is_empty()),
         (
             "health check configured",
-            !manifest.health.ready.path.is_empty(),
+            !manifest.health.ready.path.is_empty()
+                && !manifest.health.ready.service.is_empty(),
         ),
         (
-            "no privileged containers",
-            !violations
-                .iter()
-                .any(|v| v.rule == craterun_bundle::compose::BlockedRule::PrivilegedContainer),
+            "health check service exists in compose",
+            compose
+                .services
+                .contains_key(&manifest.health.ready.service),
         ),
         (
-            "no host networking",
-            !violations
-                .iter()
-                .any(|v| v.rule == craterun_bundle::compose::BlockedRule::HostNetworking),
+            "all routed services exist in compose",
+            manifest
+                .routes
+                .values()
+                .all(|r| compose.services.contains_key(&r.service)),
         ),
         (
-            "no Docker socket mounts",
-            !violations
-                .iter()
-                .any(|v| v.rule == craterun_bundle::compose::BlockedRule::DockerSocketMount),
+            "persistent volumes declared",
+            // Either no volumes in compose, or all compose volumes are declared in manifest
+            compose.volumes.is_empty()
+                || compose
+                    .volumes
+                    .keys()
+                    .all(|v| manifest.volumes.contains_key(v)),
+        ),
+        // Compose safety checks — each maps to a blocked rule
+        ("no privileged containers", !has_violation(BlockedRule::PrivilegedContainer)),
+        ("no host networking", !has_violation(BlockedRule::HostNetworking)),
+        ("no Docker socket mounts", !has_violation(BlockedRule::DockerSocketMount)),
+        (
+            "no dangerous capabilities",
+            !has_violation(BlockedRule::DangerousCapability),
         ),
         (
             "no arbitrary host mounts",
-            !violations
-                .iter()
-                .any(|v| v.rule == craterun_bundle::compose::BlockedRule::ArbitraryBindMount
-                    || v.rule == craterun_bundle::compose::BlockedRule::HostRootMount),
+            !has_violation(BlockedRule::ArbitraryBindMount)
+                && !has_violation(BlockedRule::HostRootMount),
         ),
         (
             "all host ports auto-assigned",
-            !violations
-                .iter()
-                .any(|v| v.rule == craterun_bundle::compose::BlockedRule::FixedHostPort),
+            !has_violation(BlockedRule::FixedHostPort),
+        ),
+        (
+            "no external networks",
+            !has_violation(BlockedRule::ExternalNetwork),
+        ),
+        (
+            "no external volumes",
+            !has_violation(BlockedRule::ExternalVolume),
+        ),
+        (
+            "all images buildable locally",
+            compose.services.values().all(|s| {
+                s.build.is_some() || s.image.is_some()
+            }),
         ),
     ];
 
@@ -80,15 +108,29 @@ pub async fn run(args: CertifyArgs) -> anyhow::Result<()> {
         }
     }
 
-    if !violations.is_empty() {
+    // Print specific violation details
+    let detail_violations: Vec<_> = violations
+        .iter()
+        .filter(|v| {
+            // Skip generic manifest-level rules already covered above
+            !matches!(
+                v.rule,
+                BlockedRule::MissingAppName
+                    | BlockedRule::MissingIcon
+                    | BlockedRule::MissingFrontendRoute
+            )
+        })
+        .collect();
+
+    if !detail_violations.is_empty() {
         println!();
-        for v in &violations {
+        for v in detail_violations {
             output::failure(&v.to_string());
         }
     }
 
     println!();
-    if all_pass && violations.is_empty() {
+    if all_pass {
         output::success("Certified: consumer-ready");
         Ok(())
     } else {

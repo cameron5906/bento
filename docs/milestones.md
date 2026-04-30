@@ -10,7 +10,7 @@ Status of each milestone from the implementation brief (DOC.pdf).
 | M4 | Windows Managed Runtime Spike | DONE | see below | WSL2 + containerd adapter. Needs VM testing. |
 | M5 | Native Windows Installer | DONE | see below | NSIS script generator + CLI integration |
 | M6 | Repair, Reset, Diagnostics | DONE | see below | Diagnostics export, error mapping, repair flow |
-| M7 | Consumer Certification Gate | NOT STARTED | — | Hardened certify command, build gate |
+| M7 | Consumer Certification Gate | DONE | see below | 17-check certify, consumer-pack build gate |
 | M8 | First External Test | NOT STARTED | — | Hand to non-technical user, observe |
 
 ## Definition of Done (from spec)
@@ -69,3 +69,18 @@ Repair and ResetData commands were implemented in M2's state machine. M6 adds:
 - Repair flow: stop -> remove (keep volumes) -> re-prepare from ImportingImages.
 - ResetData flow: stop -> remove (including volumes) -> stopped. Requires
   `{ "confirm": true }` in POST body as a safety gate.
+
+## M7 Notes
+
+`craterun certify` now runs 17 checks:
+
+**Manifest checks:** app name, app version, icon, frontend route, health check
+configured, health check service exists in compose, all routed services exist,
+persistent volumes declared.
+
+**Security checks:** no privileged containers, no host networking, no Docker socket
+mounts, no dangerous capabilities, no arbitrary host mounts, all host ports
+auto-assigned, no external networks, no external volumes, all images buildable.
+
+`craterun package --consumer` runs all checks as a hard gate before building.
+Failures exit with clear per-check output and a suggestion to use Dev Pack mode.
