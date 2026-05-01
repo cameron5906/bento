@@ -54,20 +54,24 @@ pub async fn launch_supervisor(
     let sock_path = supervisor_sock_path(&app_id, &app_name);
     let _ = std::fs::remove_file(&sock_path);
 
-    let mut cmd = tokio::process::Command::new(&supervisor_path);
-    cmd.arg(bundle_path.to_string_lossy().as_ref())
-        .kill_on_drop(true); // stop supervisor when shell exits
+    // Write supervisor output to a log file for debugging
+    let log_dir = supervisor_sock_path(&app_id, &app_name)
+        .parent()
+        .unwrap_or(std::path::Path::new("."))
+        .parent()
+        .unwrap_or(std::path::Path::new("."))
+        .join("logs");
+    let _ = std::fs::create_dir_all(&log_dir);
+    let log_file = std::fs::File::create(log_dir.join("supervisor.log"))
+        .map_err(|e| format!("failed to create log file: {}", e))?;
+    let log_err = log_file.try_clone()
+        .map_err(|e| format!("failed to clone log file: {}", e))?;
 
-    // Hide the supervisor's console window on Windows.
-    // DETACHED_PROCESS (0x8) prevents inheriting the parent's console
-    // without suppressing the process entirely like CREATE_NO_WINDOW does.
-    #[cfg(windows)]
-    {
-        use std::os::windows::process::CommandExt;
-        cmd.creation_flags(0x00000008); // DETACHED_PROCESS
-    }
-
-    let child = cmd
+    let child = tokio::process::Command::new(&supervisor_path)
+        .arg(bundle_path.to_string_lossy().as_ref())
+        .kill_on_drop(true)
+        .stdout(log_file)
+        .stderr(log_err)
         .spawn()
         .map_err(|e| format!("failed to launch supervisor: {}", e))?;
 

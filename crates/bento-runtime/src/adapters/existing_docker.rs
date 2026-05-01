@@ -8,7 +8,7 @@ use bento_core::{AppId, BentoError};
 
 /// Create a docker Command with console window hidden on Windows
 fn docker_cmd() -> Command {
-    let mut cmd = docker_cmd();
+    let mut cmd = Command::new("docker");
     #[cfg(windows)]
     {
         use std::os::windows::process::CommandExt;
