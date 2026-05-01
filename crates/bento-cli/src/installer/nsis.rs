@@ -111,8 +111,12 @@ Unicode True
 RequestExecutionLevel user
 InstallDir "$LOCALAPPDATA\Programs\{app_name}"
 
-;; Installer UI
+;; Installer UI — use app icon if available
 !define MUI_ABORTWARNING
+!if /FileExists "{bundle_dir}\assets\icon.ico"
+  !define MUI_ICON "{bundle_dir}\assets\icon.ico"
+  !define MUI_UNICON "{bundle_dir}\assets\icon.ico"
+!endif
 
 ;; Pages: minimal consumer flow (install confirmation + progress)
 !insertmacro MUI_PAGE_INSTFILES
@@ -136,7 +140,7 @@ Section "Install"
 
     ;; Start Menu shortcut
     CreateDirectory "$SMPROGRAMS\{app_name}"
-    CreateShortcut "$SMPROGRAMS\{app_name}\{app_name}.lnk" "$INSTDIR\{app_exe}"
+    CreateShortcut "$SMPROGRAMS\{app_name}\{app_name}.lnk" "$INSTDIR\{app_exe}" "" "$INSTDIR\bundle\assets\icon.ico"
     CreateShortcut "$SMPROGRAMS\{app_name}\Uninstall.lnk" "$INSTDIR\uninstall.exe"
 
     ;; Register uninstaller in Add/Remove Programs (per-user)
@@ -155,6 +159,8 @@ Section "Install"
         "NoModify" 1
     WriteRegDWORD HKCU "Software\Microsoft\Windows\CurrentVersion\Uninstall\{app_id}" \
         "NoRepair" 1
+    WriteRegStr HKCU "Software\Microsoft\Windows\CurrentVersion\Uninstall\{app_id}" \
+        "DisplayIcon" "$INSTDIR\bundle\assets\icon.ico"
 
 SectionEnd
 
