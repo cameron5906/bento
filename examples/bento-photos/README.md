@@ -112,7 +112,7 @@ docker compose up --build
 bento run-local
 
 # Package as a Windows installer
-bento package --consumer --target windows-x64
+bento box --target windows-x64
 ```
 
 ## First Launch

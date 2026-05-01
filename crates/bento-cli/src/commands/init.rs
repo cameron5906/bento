@@ -4,11 +4,19 @@ use clap::Args;
 
 use crate::output;
 
+/// Standard compose filenames in priority order
+const COMPOSE_FILENAMES: &[&str] = &[
+    "docker-compose.yml",
+    "docker-compose.yaml",
+    "compose.yml",
+    "compose.yaml",
+];
+
 #[derive(Args)]
 pub struct InitArgs {
-    /// Path to existing docker-compose.yml
-    #[arg(short, long, default_value = "./docker-compose.yml")]
-    pub compose: PathBuf,
+    /// Path to existing docker-compose file (auto-detected if not specified)
+    #[arg(short, long)]
+    pub compose: Option<PathBuf>,
 
     /// Output path for bento.yml
     #[arg(short, long, default_value = "./bento.yml")]
@@ -18,12 +26,17 @@ pub struct InitArgs {
 pub async fn run(args: InitArgs) -> anyhow::Result<()> {
     output::header("Bento Init");
 
-    if !args.compose.exists() {
-        anyhow::bail!(
-            "docker-compose.yml not found at {}",
-            args.compose.display()
-        );
-    }
+    let compose_path = match args.compose {
+        Some(p) => {
+            if !p.exists() {
+                anyhow::bail!("Compose file not found at {}", p.display());
+            }
+            p
+        }
+        None => find_compose_file()?,
+    };
+
+    output::success(&format!("Found compose file: {}", compose_path.display()));
 
     if args.output.exists() {
         anyhow::bail!(
@@ -32,7 +45,7 @@ pub async fn run(args: InitArgs) -> anyhow::Result<()> {
         );
     }
 
-    let compose = bento_bundle::compose::ComposeFile::from_file(&args.compose)?;
+    let compose = bento_bundle::compose::ComposeFile::from_file(&compose_path)?;
 
     let services: Vec<&str> = compose.services.keys().map(|s| s.as_str()).collect();
     output::info(&format!("Found services: {}", services.join(", ")));
@@ -46,13 +59,29 @@ pub async fn run(args: InitArgs) -> anyhow::Result<()> {
         .and_then(|p| p.container_port())
         .unwrap_or(3000);
 
-    let template = generate_template(first_service, first_port, &args.compose);
+    let template = generate_template(first_service, first_port, &compose_path);
     std::fs::write(&args.output, template)?;
 
     output::success(&format!("Created {}", args.output.display()));
     output::info("Edit bento.yml to configure your app metadata, routes, and health checks.");
+    output::info(&format!("Then run: bento box --target {}", crate::platform::default_build_target()));
 
     Ok(())
+}
+
+fn find_compose_file() -> anyhow::Result<PathBuf> {
+    for name in COMPOSE_FILENAMES {
+        let path = PathBuf::from(name);
+        if path.exists() {
+            return Ok(path);
+        }
+    }
+    anyhow::bail!(
+        "No compose file found in current directory.\n\
+         Looked for: {}\n\
+         Use --compose to specify the path.",
+        COMPOSE_FILENAMES.join(", ")
+    )
 }
 
 fn generate_template(frontend_service: &str, frontend_port: u16, compose_path: &Path) -> String {

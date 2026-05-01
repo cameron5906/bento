@@ -64,7 +64,7 @@ volumes:
 **You** run one command:
 
 ```bash
-bento package --consumer
+bento box
 ```
 
 **Your user** downloads `MyAppSetup.exe`, double-clicks it, clicks Install, and the app opens in a native desktop window. Their data persists. They can close and reopen it. They can uninstall it from Add/Remove Programs. They never know containers exist.
@@ -82,16 +82,16 @@ bento doctor
 bento certify
 
 # 4. Build and package
-bento package --consumer
+bento box
 ```
 
 ## What Gets Produced
 
 | Platform | Command | Output |
 |---|---|---|
-| Windows | `bento package --consumer --target windows-x64` | `MyAppSetup.exe` (NSIS installer) |
-| macOS | `bento package --consumer --target macos-arm64` | `MyApp.dmg` (via Tauri) |
-| Linux | `bento package --consumer --target linux-x64` | `.deb` + `.AppImage` (via Tauri) |
+| Windows | `bento box` | `MyAppSetup.exe` (NSIS installer) |
+| macOS | `bento box` | `MyApp.dmg` (via Tauri) |
+| Linux | `bento box` | `.deb` + `.AppImage` (via Tauri) |
 
 The installer bundles everything: your app's container images, a local supervisor, and a native desktop shell. The target auto-detects based on your current OS.
 
@@ -103,7 +103,7 @@ The installer bundles everything: your app's container images, a local superviso
 | `bento doctor` | Check prerequisites (Docker, WSL2, etc.) |
 | `bento build` | Build images and produce an app bundle |
 | `bento certify` | Run 17 consumer-readiness checks |
-| `bento package --consumer` | Full pipeline: certify + build + generate installer |
+| `bento box` | Full pipeline: certify + build + generate installer |
 | `bento run-local` | Build and run locally for development |
 
 ## Consumer Safety
