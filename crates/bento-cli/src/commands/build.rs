@@ -137,12 +137,16 @@ pub async fn run(args: BuildArgs) -> anyhow::Result<()> {
     )?;
     output::success("Wrote shell-config.json");
 
-    // Copy icon if it exists
+    // Generate platform-appropriate icons from the source image
     if let Some(ref icon) = manifest.app.icon {
         let icon_path = manifest_dir.join(icon);
         if icon_path.exists() {
-            writer.copy_asset(&icon_path, "icon.png")?;
-            output::success("Copied icon");
+            crate::builder::icon_pipeline::generate_icons(
+                &icon_path,
+                &writer.output_dir().join("assets"),
+                &args.target,
+            )
+            .await?;
         }
     }
 
