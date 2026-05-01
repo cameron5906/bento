@@ -214,14 +214,17 @@ impl SupervisorEngine {
     }
 
     fn build_runtime_plan(&self) -> RuntimePlan {
-        let mut base_port = 49200u16;
         let services: Vec<PlannedService> = self
             .manifest
             .services
             .iter()
             .map(|svc| {
-                let host_port = base_port;
-                base_port += 1;
+                // Allocate an ephemeral port from the OS to avoid collisions
+                let host_port = if svc.container_port > 0 {
+                    allocate_ephemeral_port().unwrap_or(0)
+                } else {
+                    0
+                };
 
                 // Mount named volumes declared in the service's volume_mounts.
                 // Volume names are prefixed with the app namespace to avoid conflicts.
@@ -277,4 +280,12 @@ impl SupervisorEngine {
             error: user_error,
         });
     }
+}
+
+/// Ask the OS for a free port by binding to port 0, then releasing it.
+fn allocate_ephemeral_port() -> Option<u16> {
+    std::net::TcpListener::bind("127.0.0.1:0")
+        .ok()
+        .and_then(|l| l.local_addr().ok())
+        .map(|a| a.port())
 }
