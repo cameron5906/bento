@@ -6,8 +6,19 @@ use crate::adapters::existing_docker::ExistingDockerAdapter;
 use crate::adapters::wsl_containerd::WslContainerdAdapter;
 use crate::types::RuntimeDetectionResult;
 
+/// Create a command with console window hidden on Windows
+fn hidden_cmd(program: &str) -> tokio::process::Command {
+    let mut cmd = tokio::process::Command::new(program);
+    #[cfg(windows)]
+    {
+        use std::os::windows::process::CommandExt;
+        cmd.creation_flags(0x08000000);
+    }
+    cmd
+}
+
 pub async fn detect_docker() -> RuntimeDetectionResult {
-    let output = tokio::process::Command::new("docker")
+    let output = hidden_cmd("docker")
         .args(["version", "--format", "{{.Server.Version}}"])
         .output()
         .await;
@@ -32,7 +43,7 @@ pub async fn detect_docker() -> RuntimeDetectionResult {
 }
 
 pub async fn detect_podman() -> RuntimeDetectionResult {
-    let output = tokio::process::Command::new("podman")
+    let output = hidden_cmd("podman")
         .args(["version", "--format", "{{.Client.Version}}"])
         .output()
         .await;
@@ -59,7 +70,7 @@ pub async fn detect_podman() -> RuntimeDetectionResult {
 pub async fn detect_wsl() -> RuntimeDetectionResult {
     #[cfg(windows)]
     {
-        let output = tokio::process::Command::new("wsl.exe")
+        let output = hidden_cmd("wsl.exe")
             .args(["--status"])
             .output()
             .await;

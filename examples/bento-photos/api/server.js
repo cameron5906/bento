@@ -73,10 +73,29 @@ async function ensureSchema() {
   `);
 }
 
-ensureSchema().catch((e) => console.error("Schema init:", e.message));
+// Retry schema init until Postgres is ready (it starts slower than the API)
+let schemaReady = false;
+async function initSchemaWithRetry() {
+  for (let i = 0; i < 30; i++) {
+    try {
+      await ensureSchema();
+      schemaReady = true;
+      console.log("Database schema ready");
+      return;
+    } catch (e) {
+      console.log(`Waiting for database... (${e.message})`);
+      await new Promise(r => setTimeout(r, 2000));
+    }
+  }
+  console.error("Failed to initialize schema after 60 seconds");
+}
+initSchemaWithRetry();
 
 // --- Health ---
 app.get("/health", async (req, res) => {
+  if (!schemaReady) {
+    return res.status(503).json({ status: "starting", database: "initializing" });
+  }
   try {
     await pool.query("SELECT 1");
     res.json({ status: "healthy", database: "connected" });

@@ -263,9 +263,13 @@ impl SupervisorEngine {
             })
             .collect();
 
+        // Sort services by dependency order: services with no deps first,
+        // then services whose deps have already been placed
+        let sorted = topo_sort_services(services);
+
         RuntimePlan {
             app_id: self.app_id.clone(),
-            services,
+            services: sorted,
             network_name: format!("bento-{}", self.app_id.as_str().replace('.', "-")),
         }
     }
@@ -280,6 +284,38 @@ impl SupervisorEngine {
             error: user_error,
         });
     }
+}
+
+/// Topological sort: start dependencies before the services that need them.
+/// Services with no deps come first, then services whose deps are all resolved.
+fn topo_sort_services(services: Vec<PlannedService>) -> Vec<PlannedService> {
+    let mut sorted: Vec<PlannedService> = Vec::new();
+    let mut remaining = services;
+
+    // Simple iterative topo sort — safe for small service counts
+    let max_iterations = remaining.len() * remaining.len() + 1;
+    for _ in 0..max_iterations {
+        if remaining.is_empty() {
+            break;
+        }
+
+        let resolved_names: Vec<String> = sorted.iter().map(|s| s.name.clone()).collect();
+
+        let (ready, not_ready): (Vec<_>, Vec<_>) = remaining
+            .into_iter()
+            .partition(|s| s.depends_on.iter().all(|dep| resolved_names.contains(dep)));
+
+        if ready.is_empty() && !not_ready.is_empty() {
+            // Circular dependency or missing dep — just append remaining
+            sorted.extend(not_ready);
+            break;
+        }
+
+        sorted.extend(ready);
+        remaining = not_ready;
+    }
+
+    sorted
 }
 
 /// Ask the OS for a free port by binding to port 0, then releasing it.

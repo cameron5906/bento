@@ -6,6 +6,18 @@ use tokio::process::Command;
 use bento_core::types::ContainerState;
 use bento_core::{AppId, BentoError};
 
+/// Create a docker Command with console window hidden on Windows
+fn docker_cmd() -> Command {
+    let mut cmd = docker_cmd();
+    #[cfg(windows)]
+    {
+        use std::os::windows::process::CommandExt;
+        // CREATE_NO_WINDOW prevents console flashes when running docker CLI
+        cmd.creation_flags(0x08000000);
+    }
+    cmd
+}
+
 use crate::adapter::RuntimeAdapter;
 use crate::types::{ContainerStatus, ImageRef, LogLine, RemoveOptions, RuntimeDetectionResult, RuntimePlan};
 
@@ -40,7 +52,7 @@ impl RuntimeAdapter for ExistingDockerAdapter {
         archive_path: &Path,
         image_name: &str,
     ) -> Result<ImageRef, BentoError> {
-        let output = Command::new("docker")
+        let output = docker_cmd()
             .args(["load", "-i", &archive_path.to_string_lossy()])
             .output()
             .await
@@ -69,7 +81,7 @@ impl RuntimeAdapter for ExistingDockerAdapter {
             let container = Self::container_name(&plan.app_id, &service.name);
 
             // Remove any leftover container from a previous run so the name is free
-            let _ = Command::new("docker")
+            let _ = docker_cmd()
                 .args(["rm", "-f", &container])
                 .output()
                 .await;
@@ -106,7 +118,7 @@ impl RuntimeAdapter for ExistingDockerAdapter {
 
             args.push(service.image_ref.name.clone());
 
-            let output = Command::new("docker")
+            let output = docker_cmd()
                 .args(&args)
                 .output()
                 .await
@@ -129,7 +141,7 @@ impl RuntimeAdapter for ExistingDockerAdapter {
 
     async fn stop_app(&self, app_id: &AppId) -> Result<(), BentoError> {
         let prefix = format!("bento-{}", app_id.as_str().replace('.', "-"));
-        let output = Command::new("docker")
+        let output = docker_cmd()
             .args(["ps", "-a", "--filter", &format!("name={}", prefix), "--format", "{{.Names}}"])
             .output()
             .await
@@ -139,11 +151,11 @@ impl RuntimeAdapter for ExistingDockerAdapter {
         for name in names.lines() {
             let name = name.trim();
             if !name.is_empty() {
-                let _ = Command::new("docker")
+                let _ = docker_cmd()
                     .args(["stop", name])
                     .output()
                     .await;
-                let _ = Command::new("docker")
+                let _ = docker_cmd()
                     .args(["rm", "-f", name])
                     .output()
                     .await;
@@ -159,7 +171,7 @@ impl RuntimeAdapter for ExistingDockerAdapter {
         service: &str,
     ) -> Result<ContainerStatus, BentoError> {
         let container = Self::container_name(app_id, service);
-        let output = Command::new("docker")
+        let output = docker_cmd()
             .args(["inspect", "--format", "{{.State.Status}}", &container])
             .output()
             .await
@@ -190,7 +202,7 @@ impl RuntimeAdapter for ExistingDockerAdapter {
             vec![Self::container_name(app_id, svc)]
         } else {
             let prefix = format!("bento-{}", app_id.as_str().replace('.', "-"));
-            let output = Command::new("docker")
+            let output = docker_cmd()
                 .args(["ps", "-a", "--filter", &format!("name={}", prefix), "--format", "{{.Names}}"])
                 .output()
                 .await
@@ -206,7 +218,7 @@ impl RuntimeAdapter for ExistingDockerAdapter {
         let tail_str = tail.unwrap_or(100).to_string();
 
         for container in containers {
-            let output = Command::new("docker")
+            let output = docker_cmd()
                 .args(["logs", "--tail", &tail_str, &container])
                 .output()
                 .await
@@ -236,7 +248,7 @@ impl RuntimeAdapter for ExistingDockerAdapter {
 
     async fn create_network(&self, app_id: &AppId) -> Result<(), BentoError> {
         let name = Self::network_name(app_id);
-        let output = Command::new("docker")
+        let output = docker_cmd()
             .args(["network", "create", &name])
             .output()
             .await
@@ -265,7 +277,7 @@ impl RuntimeAdapter for ExistingDockerAdapter {
             app_id.as_str().replace('.', "-"),
             volume_name
         );
-        let output = Command::new("docker")
+        let output = docker_cmd()
             .args(["volume", "create", &full_name])
             .output()
             .await
@@ -290,14 +302,14 @@ impl RuntimeAdapter for ExistingDockerAdapter {
         self.stop_app(app_id).await?;
 
         let network = Self::network_name(app_id);
-        let _ = Command::new("docker")
+        let _ = docker_cmd()
             .args(["network", "rm", &network])
             .output()
             .await;
 
         if options.remove_volumes {
             let prefix = format!("bento-{}", app_id.as_str().replace('.', "-"));
-            let output = Command::new("docker")
+            let output = docker_cmd()
                 .args(["volume", "ls", "--filter", &format!("name={}", prefix), "--format", "{{.Name}}"])
                 .output()
                 .await
@@ -310,7 +322,7 @@ impl RuntimeAdapter for ExistingDockerAdapter {
             for vol in String::from_utf8_lossy(&output.stdout).lines() {
                 let vol = vol.trim();
                 if !vol.is_empty() {
-                    let _ = Command::new("docker")
+                    let _ = docker_cmd()
                         .args(["volume", "rm", vol])
                         .output()
                         .await;
