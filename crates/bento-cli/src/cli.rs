@@ -1,6 +1,6 @@
 use clap::{Parser, Subcommand};
 
-use crate::commands::{build, certify, init, package, run_local};
+use crate::commands::{bento_box, build, certify, init, package, run_local};
 
 #[derive(Parser)]
 #[command(name = "bento")]
@@ -25,7 +25,12 @@ pub enum Commands {
     /// Check if an app is safe for consumer packaging
     Certify(certify::CertifyArgs),
 
-    /// Package app into a consumer installer
+    /// Package app into a consumer desktop installer
+    #[command(name = "box")]
+    Box(bento_box::BoxArgs),
+
+    /// Package app (use 'bento box' instead)
+    #[command(hide = true)]
     Package(package::PackageArgs),
 
     /// Build and run the app locally

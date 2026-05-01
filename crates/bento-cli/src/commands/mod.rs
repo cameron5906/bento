@@ -1,3 +1,4 @@
+pub mod bento_box;
 pub mod build;
 pub mod certify;
 pub mod doctor;
