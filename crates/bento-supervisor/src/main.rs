@@ -50,12 +50,16 @@ async fn main() -> anyhow::Result<()> {
     let paths = bento_core::paths::AppPaths::new(app_id.clone(), manifest.app.name.clone());
     write_sock_info(&paths, api_port, &token)?;
 
+    // Track client activity for the idle timer
+    let active = Arc::new(AtomicBool::new(true));
+
     let api_state = api::AppState {
         state_rx,
         cmd_tx,
         manifest: manifest.clone(),
         adapter_name: adapter.adapter_name().to_string(),
         token: token.clone(),
+        active: active.clone(),
     };
 
     let shutdown_adapter = adapter.clone();
@@ -77,8 +81,6 @@ async fn main() -> anyhow::Result<()> {
 
     tracing::info!("Supervisor API on 127.0.0.1:{}", api_port);
 
-    // Track whether any client has connected recently
-    let active = Arc::new(AtomicBool::new(true));
     let active_for_idle = active.clone();
 
     // Idle timer: if no API requests for IDLE_TIMEOUT_SECS, shut down
