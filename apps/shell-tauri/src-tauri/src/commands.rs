@@ -58,11 +58,13 @@ pub async fn launch_supervisor(
     cmd.arg(bundle_path.to_string_lossy().as_ref())
         .kill_on_drop(true); // stop supervisor when shell exits
 
-    // Hide the supervisor's console window on Windows
+    // Hide the supervisor's console window on Windows.
+    // DETACHED_PROCESS (0x8) prevents inheriting the parent's console
+    // without suppressing the process entirely like CREATE_NO_WINDOW does.
     #[cfg(windows)]
     {
         use std::os::windows::process::CommandExt;
-        cmd.creation_flags(0x08000000); // CREATE_NO_WINDOW
+        cmd.creation_flags(0x00000008); // DETACHED_PROCESS
     }
 
     let child = cmd
