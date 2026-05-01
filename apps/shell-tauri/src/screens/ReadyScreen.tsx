@@ -1,30 +1,34 @@
-import React from "react";
+import { useEffect } from "react";
 
 interface Props {
   appUrl: string;
 }
 
 export function ReadyScreen({ appUrl }: Props) {
+  useEffect(() => {
+    // Navigate the entire webview to the app URL instead of using an iframe.
+    // This gives the app full control over the window, including drag-and-drop,
+    // keyboard shortcuts, and native browser features that iframes block.
+    window.location.href = appUrl;
+  }, [appUrl]);
+
   return (
     <div style={styles.container}>
-      <iframe
-        src={appUrl}
-        style={styles.iframe}
-        title="App Content"
-      />
+      <p style={styles.text}>Opening app...</p>
     </div>
   );
 }
 
 const styles: Record<string, React.CSSProperties> = {
   container: {
-    width: "100vw",
+    display: "flex",
+    alignItems: "center",
+    justifyContent: "center",
     height: "100vh",
-    overflow: "hidden",
+    background: "#0a0a0f",
   },
-  iframe: {
-    width: "100%",
-    height: "100%",
-    border: "none",
+  text: {
+    color: "#888",
+    fontSize: 14,
   },
 };
