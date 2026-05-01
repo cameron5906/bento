@@ -118,7 +118,7 @@ Bento enforces strict rules for consumer packaging. These Compose features are *
 - Dangerous Linux capabilities
 - External networks/volumes
 
-If your Compose file uses any of these, `bento certify` will tell you exactly what to fix. Developer-mode packaging (`--mode dev-pack`) exists as an escape hatch.
+If your Compose file uses any of these, `bento certify` will tell you exactly what to fix. You can still use `bento build` directly to produce a bundle without consumer certification.
 
 ## Architecture
 

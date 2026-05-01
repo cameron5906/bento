@@ -160,7 +160,7 @@ fn generate_token() -> String {
     let mut rng = rand::rng();
     let bytes: [u8; 32] = rng.random();
     format!(
-        "cr_tok_{}",
+        "bt_tok_{}",
         bytes.iter().map(|b| format!("{:02x}", b)).collect::<String>()
     )
 }

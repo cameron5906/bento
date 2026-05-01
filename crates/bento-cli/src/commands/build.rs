@@ -132,15 +132,21 @@ pub async fn run(args: BuildArgs) -> anyhow::Result<()> {
         &manifest.window.title,
         manifest.window.width,
         manifest.window.height,
+        manifest.splash.logo.as_ref().map(|p| p.to_string_lossy().as_ref().to_string()).as_deref(),
+        &manifest.splash.messages,
     )?;
     output::success("Wrote shell-config.json");
 
-    // Copy icon if it exists
+    // Generate platform-appropriate icons from the source image
     if let Some(ref icon) = manifest.app.icon {
         let icon_path = manifest_dir.join(icon);
         if icon_path.exists() {
-            writer.copy_asset(&icon_path, "icon.png")?;
-            output::success("Copied icon");
+            crate::builder::icon_pipeline::generate_icons(
+                &icon_path,
+                &writer.output_dir().join("assets"),
+                &args.target,
+            )
+            .await?;
         }
     }
 

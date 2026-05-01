@@ -2,7 +2,7 @@ app:
   id: com.bento.photos
   name: Bento Photos
   version: 1.0.0
-  icon: ./assets/icon.png
+  icon: ./assets/app-icon.png
 
 compose:
   file: ./docker-compose.yml
@@ -43,3 +43,17 @@ lifecycle:
 install:
   mode: consumer
   askQuestions: false
+
+splash:
+  logo: ./assets/splash-logo.png
+  messages:
+    - "Developing your photos..."
+    - "Warming up the darkroom..."
+    - "Focusing the AI lens..."
+    - "Loading your memories..."
+    - "Preparing the gallery..."
+    - "Training the photo assistant..."
+    - "Polishing the pixels..."
+    - "Organizing your photo library..."
+    - "Spinning up the vision engine..."
+    - "Getting ready for your close-up..."

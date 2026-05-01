@@ -65,7 +65,7 @@ const html = `<!DOCTYPE html>
 <body>
   <div class="card">
     <h1>Hello Web API</h1>
-    <p>Packaged with CrateRun. Running a web frontend, Node API, and Postgres database inside containers.</p>
+    <p>Packaged with Bento. Running a web frontend, Node API, and Postgres database inside containers.</p>
     <div class="counter" id="count">-</div>
     <div class="counter-label">Persisted in Postgres &mdash; survives app restarts</div>
     <div>

@@ -1,5 +1,6 @@
 import React, { useEffect, useState } from "react";
 import { invoke } from "@tauri-apps/api/core";
+import bentoLogoImg from "./assets/bento-logo.png";
 import { useSupervisorStatus } from "./hooks/useSupervisorStatus";
 import { getScreen } from "./types/supervisor";
 import { LoadingScreen } from "./screens/LoadingScreen";
@@ -12,6 +13,8 @@ export default function App() {
     useSupervisorStatus();
   const [launching, setLaunching] = useState(false);
   const [launchError, setLaunchError] = useState<string | null>(null);
+  const [splashLogo, setSplashLogo] = useState<string | undefined>();
+  const [splashMessages, setSplashMessages] = useState<string[]>([]);
 
   // Auto-launch supervisor on mount
   useEffect(() => {
@@ -21,9 +24,16 @@ export default function App() {
   async function autoLaunch() {
     setLaunching(true);
     try {
-      const result = await invoke<{ connected: boolean; port: number }>(
-        "launch_supervisor"
-      );
+      const result = await invoke<{
+        connected: boolean;
+        port: number;
+        splashLogo: string | null;
+        splashMessages: string[];
+      }>("launch_supervisor");
+
+      if (result.splashLogo) setSplashLogo(result.splashLogo);
+      if (result.splashMessages?.length) setSplashMessages(result.splashMessages);
+
       if (result.connected) {
         await connect(result.port, "auto");
       } else {
@@ -73,14 +83,14 @@ export default function App() {
       return <BlockedScreen error={status.error!} />;
     case "loading":
     default:
-      return <LoadingScreen status={status} />;
+      return <LoadingScreen status={status} splashLogo={splashLogo} splashMessages={splashMessages} />;
   }
 }
 
 function StartupScreen() {
   return (
     <div style={styles.center}>
-      <div style={styles.spinner} />
+      <img src={bentoLogoImg} alt="" style={{ width: 100, height: 100, objectFit: "contain", marginBottom: 16, opacity: 0.8 }} />
       <p style={styles.text}>Starting up...</p>
     </div>
   );

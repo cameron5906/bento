@@ -14,9 +14,12 @@ pub struct SupervisorState {
 }
 
 #[derive(Serialize)]
+#[serde(rename_all = "camelCase")]
 pub struct ConnectResponse {
     pub connected: bool,
     pub port: u16,
+    pub splash_logo: Option<String>,
+    pub splash_messages: Vec<String>,
 }
 
 /// Launch or reconnect to the supervisor. If an existing supervisor is
@@ -64,9 +67,12 @@ pub async fn launch_supervisor(
                         }
                     }
 
+                    let splash = read_splash_config(&bundle_path);
                     return Ok(ConnectResponse {
                         connected: true,
                         port: info.port,
+                        splash_logo: splash.0,
+                        splash_messages: splash.1,
                     });
                 }
             }
@@ -128,9 +134,12 @@ pub async fn launch_supervisor(
         let _ = c.post_command("prepare").await;
     }
 
+    let splash = read_splash_config(&bundle_path);
     Ok(ConnectResponse {
         connected: true,
         port: sock_info.port,
+        splash_logo: splash.0,
+        splash_messages: splash.1,
     })
 }
 
@@ -144,7 +153,7 @@ pub async fn connect_supervisor(
     let status = client.get_status().await;
     let connected = status.is_ok();
     *state.client.lock().await = Some(client);
-    Ok(ConnectResponse { connected, port })
+    Ok(ConnectResponse { connected, port, splash_logo: None, splash_messages: Vec::new() })
 }
 
 #[tauri::command]
@@ -219,4 +228,24 @@ async fn wait_for_sock_file(path: &std::path::Path) -> Result<SupervisorSockInfo
         "supervisor did not start within 10 seconds (expected {})",
         path.display()
     ))
+}
+
+/// Read splash config from bundle/shell/shell-config.json
+fn read_splash_config(bundle_path: &std::path::Path) -> (Option<String>, Vec<String>) {
+    let config_path = bundle_path.join("shell").join("shell-config.json");
+    if let Ok(content) = std::fs::read_to_string(&config_path) {
+        if let Ok(config) = serde_json::from_str::<serde_json::Value>(&content) {
+            let logo = config["splash"]["logo"].as_str().map(|s| s.to_string());
+            let messages: Vec<String> = config["splash"]["messages"]
+                .as_array()
+                .map(|arr| {
+                    arr.iter()
+                        .filter_map(|v| v.as_str().map(|s| s.to_string()))
+                        .collect()
+                })
+                .unwrap_or_default();
+            return (logo, messages);
+        }
+    }
+    (None, Vec::new())
 }
