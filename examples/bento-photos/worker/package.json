@@ -1,0 +1,10 @@
+{
+  "name": "bento-photos-worker",
+  "private": true,
+  "version": "1.0.0",
+  "dependencies": {
+    "pg": "^8.13.0",
+    "ioredis": "^5.4.0",
+    "openai": "^4.80.0"
+  }
+}
