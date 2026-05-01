@@ -5,6 +5,7 @@ mod health;
 mod proxy;
 
 use std::path::PathBuf;
+use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::Arc;
 
 use tokio::sync::{mpsc, watch};
@@ -17,6 +18,10 @@ use bento_runtime::adapters::existing_docker::ExistingDockerAdapter;
 use bento_runtime::RuntimeAdapter;
 
 use engine::{SupervisorCommand, SupervisorEngine};
+
+/// How long to keep containers running after the last client disconnects.
+/// Generous timeout so reopening the app is instant.
+const IDLE_TIMEOUT_SECS: u64 = 15 * 60; // 15 minutes
 
 #[tokio::main]
 async fn main() -> anyhow::Result<()> {
@@ -53,9 +58,9 @@ async fn main() -> anyhow::Result<()> {
         token: token.clone(),
     };
 
-    // Keep a handle to the adapter for shutdown cleanup
     let shutdown_adapter = adapter.clone();
     let shutdown_app_id = app_id.clone();
+    let sock_file = paths.supervisor_sock_file();
 
     let engine = SupervisorEngine::new(
         app_id,
@@ -72,22 +77,50 @@ async fn main() -> anyhow::Result<()> {
 
     tracing::info!("Supervisor API on 127.0.0.1:{}", api_port);
 
-    let listener = tokio::net::TcpListener::bind(format!("127.0.0.1:{}", api_port)).await?;
-    let router = api::router(api_state);
+    // Track whether any client has connected recently
+    let active = Arc::new(AtomicBool::new(true));
+    let active_for_idle = active.clone();
 
-    // Graceful shutdown: stop containers when the supervisor exits.
-    // The shell kills the supervisor (kill_on_drop) when the window closes,
-    // and ctrl_c catches manual termination during development.
+    // Idle timer: if no API requests for IDLE_TIMEOUT_SECS, shut down
+    let idle_handle = tokio::spawn(async move {
+        loop {
+            tokio::time::sleep(std::time::Duration::from_secs(30)).await;
+
+            if active_for_idle.swap(false, Ordering::Relaxed) {
+                // Activity detected in the last 30s, reset
+                continue;
+            }
+
+            // No activity — start the idle countdown
+            tracing::info!("No client activity, starting idle countdown...");
+            tokio::time::sleep(std::time::Duration::from_secs(IDLE_TIMEOUT_SECS)).await;
+
+            if !active_for_idle.load(Ordering::Relaxed) {
+                tracing::info!("Idle timeout reached — shutting down");
+                break;
+            }
+        }
+    });
+
+    let listener = tokio::net::TcpListener::bind(format!("127.0.0.1:{}", api_port)).await?;
+    let router = api::router(api_state, active);
+
     let server = axum::serve(listener, router)
-        .with_graceful_shutdown(shutdown_signal());
+        .with_graceful_shutdown(async move {
+            tokio::select! {
+                _ = shutdown_signal() => {}
+                _ = idle_handle => {}
+            }
+        });
 
     server
         .await
         .map_err(|e| anyhow::anyhow!("server error: {}", e))?;
 
-    // Cleanup: stop all containers for this app
+    // Cleanup
     tracing::info!("Shutting down — stopping containers");
     let _ = shutdown_adapter.stop_app(&shutdown_app_id).await;
+    let _ = std::fs::remove_file(&sock_file);
 
     engine_handle.abort();
     Ok(())

@@ -11,7 +11,6 @@ use crate::supervisor_client::SupervisorClient;
 
 pub struct SupervisorState {
     pub client: Mutex<Option<Arc<SupervisorClient>>>,
-    pub child: Mutex<Option<tokio::process::Child>>,
 }
 
 #[derive(Serialize)]
@@ -20,22 +19,19 @@ pub struct ConnectResponse {
     pub port: u16,
 }
 
-/// Spawn the supervisor binary as a child process, wait for its sock file,
-/// and auto-connect. This is the production startup path — the consumer
-/// never sees connection details.
+/// Launch or reconnect to the supervisor. If an existing supervisor is
+/// already running (sock file exists and API responds), reuse it instead
+/// of spawning a new one. This makes reopening the app instant.
 #[tauri::command]
 pub async fn launch_supervisor(
     state: State<'_, SupervisorState>,
 ) -> Result<ConnectResponse, String> {
-    // Locate the supervisor binary next to the shell executable
     let exe_dir = std::env::current_exe()
         .map(|p| p.parent().unwrap_or_else(|| std::path::Path::new(".")).to_path_buf())
         .unwrap_or_else(|_| PathBuf::from("."));
 
-    let supervisor_path = find_supervisor(&exe_dir);
     let bundle_path = exe_dir.join("bundle");
 
-    // Read app ID first so we can clean up stale state before launching
     let manifest_path = bundle_path.join("manifest.json");
     let (app_id, app_name) = if manifest_path.exists() {
         let content = std::fs::read_to_string(&manifest_path)
@@ -50,12 +46,39 @@ pub async fn launch_supervisor(
         ("unknown".to_string(), "App".to_string())
     };
 
-    // Delete stale sock file so we only read the fresh one from the new supervisor
     let sock_path = supervisor_sock_path(&app_id, &app_name);
-    let _ = std::fs::remove_file(&sock_path);
 
-    // Write supervisor output to a log file for debugging
-    let log_dir = supervisor_sock_path(&app_id, &app_name)
+    // Try to reconnect to an existing supervisor first
+    if sock_path.exists() {
+        if let Ok(content) = std::fs::read_to_string(&sock_path) {
+            if let Ok(info) = serde_json::from_str::<SupervisorSockInfo>(&content) {
+                let client = Arc::new(SupervisorClient::new(info.port, info.token.clone()));
+                if let Ok(status) = client.get_status().await {
+                    // Existing supervisor is alive — reuse it
+                    *state.client.lock().await = Some(client);
+
+                    // Send prepare if it hasn't started yet (progress == 0)
+                    if status.progress == 0.0 && status.app_url.is_none() {
+                        if let Some(ref c) = *state.client.lock().await {
+                            let _ = c.post_command("prepare").await;
+                        }
+                    }
+
+                    return Ok(ConnectResponse {
+                        connected: true,
+                        port: info.port,
+                    });
+                }
+            }
+        }
+        // Sock file exists but supervisor is dead — clean up
+        let _ = std::fs::remove_file(&sock_path);
+    }
+
+    // No existing supervisor — spawn a new one
+    let supervisor_path = find_supervisor(&exe_dir);
+
+    let log_dir = sock_path
         .parent()
         .unwrap_or(std::path::Path::new("."))
         .parent()
@@ -67,22 +90,30 @@ pub async fn launch_supervisor(
     let log_err = log_file.try_clone()
         .map_err(|e| format!("failed to clone log file: {}", e))?;
 
-    let child = tokio::process::Command::new(&supervisor_path)
-        .arg(bundle_path.to_string_lossy().as_ref())
-        .kill_on_drop(true)
+    let mut cmd = tokio::process::Command::new(&supervisor_path);
+    cmd.arg(bundle_path.to_string_lossy().as_ref())
         .stdout(log_file)
-        .stderr(log_err)
+        .stderr(log_err);
+
+    // Hide console window on Windows
+    #[cfg(windows)]
+    {
+        use std::os::windows::process::CommandExt;
+        cmd.creation_flags(0x00000008); // DETACHED_PROCESS
+    }
+
+    // Don't kill_on_drop — the supervisor stays alive after the shell closes,
+    // with a 15-minute idle timeout before stopping containers
+    let _child = cmd
         .spawn()
         .map_err(|e| format!("failed to launch supervisor: {}", e))?;
 
-    *state.child.lock().await = Some(child);
-
-    // Wait for the new supervisor to write its sock file
+    // Wait for supervisor to write its sock file
     let sock_info = wait_for_sock_file(&sock_path).await?;
 
     let client = Arc::new(SupervisorClient::new(sock_info.port, sock_info.token.clone()));
 
-    // Wait for the API to respond
+    // Wait for API to respond
     for _ in 0..20 {
         if client.get_status().await.is_ok() {
             break;
@@ -92,7 +123,7 @@ pub async fn launch_supervisor(
 
     *state.client.lock().await = Some(client);
 
-    // Auto-send Prepare to kick off the state machine
+    // Kick off the state machine
     if let Some(ref c) = *state.client.lock().await {
         let _ = c.post_command("prepare").await;
     }

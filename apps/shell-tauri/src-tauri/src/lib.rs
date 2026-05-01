@@ -10,7 +10,6 @@ pub fn run() {
         .plugin(tauri_plugin_shell::init())
         .manage(SupervisorState {
             client: Mutex::new(None),
-            child: Mutex::new(None),
         })
         .invoke_handler(tauri::generate_handler![
             commands::launch_supervisor,

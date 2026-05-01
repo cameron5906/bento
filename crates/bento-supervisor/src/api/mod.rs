@@ -1,5 +1,8 @@
 mod routes;
 
+use std::sync::atomic::{AtomicBool, Ordering};
+use std::sync::Arc;
+
 use axum::extract::Request;
 use axum::http::StatusCode;
 use axum::middleware::{self, Next};
@@ -21,9 +24,10 @@ pub struct AppState {
     pub manifest: CompiledManifest,
     pub adapter_name: String,
     pub token: String,
+    pub active: Arc<AtomicBool>,
 }
 
-pub fn router(state: AppState) -> Router {
+pub fn router(state: AppState, active: Arc<AtomicBool>) -> Router {
     let token = state.token.clone();
 
     Router::new()
@@ -38,19 +42,29 @@ pub fn router(state: AppState) -> Router {
         .route("/diagnostics/export", get(routes::get_diagnostics))
         .layer(middleware::from_fn(move |req, next| {
             let t = token.clone();
-            auth_middleware(t, req, next)
+            let a = active.clone();
+            activity_middleware(t, a, req, next)
         }))
         .with_state(state)
 }
 
-async fn auth_middleware(token: String, req: Request, next: Next) -> Result<Response, StatusCode> {
+async fn activity_middleware(
+    token: String,
+    active: Arc<AtomicBool>,
+    req: Request,
+    next: Next,
+) -> Result<Response, StatusCode> {
     let auth_header = req
         .headers()
         .get("authorization")
         .and_then(|v| v.to_str().ok());
 
     match auth_header {
-        Some(header) if header == format!("Bearer {}", token) => Ok(next.run(req).await),
+        Some(header) if header == format!("Bearer {}", token) => {
+            // Mark activity on every authenticated request — resets idle timer
+            active.store(true, Ordering::Relaxed);
+            Ok(next.run(req).await)
+        }
         _ => Err(StatusCode::UNAUTHORIZED),
     }
 }
