@@ -20,6 +20,8 @@ pub struct CompiledManifest {
     pub window: CompiledWindow,
     pub lifecycle: CompiledLifecycle,
     pub install: CompiledInstall,
+    #[serde(default)]
+    pub splash: CompiledSplash,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -120,6 +122,26 @@ pub struct CompiledInstall {
     pub ask_questions: bool,
 }
 
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct CompiledSplash {
+    /// Custom logo filename inside the bundle assets (e.g. "splash-logo.png").
+    /// If null, the shell uses the built-in Bento logo.
+    pub logo: Option<String>,
+    /// Array of splash messages shown randomly during loading.
+    /// If empty, uses built-in defaults.
+    pub messages: Vec<String>,
+}
+
+impl Default for CompiledSplash {
+    fn default() -> Self {
+        Self {
+            logo: None,
+            messages: Vec::new(),
+        }
+    }
+}
+
 impl CompiledManifest {
     pub fn from_app_manifest(
         manifest: &AppManifest,
@@ -180,6 +202,15 @@ impl CompiledManifest {
             install: CompiledInstall {
                 mode: manifest.install.mode,
                 ask_questions: manifest.install.ask_questions,
+            },
+            splash: CompiledSplash {
+                logo: manifest.splash.logo.as_ref().map(|p| {
+                    p.file_name()
+                        .unwrap_or_default()
+                        .to_string_lossy()
+                        .to_string()
+                }),
+                messages: manifest.splash.messages.clone(),
             },
         }
     }

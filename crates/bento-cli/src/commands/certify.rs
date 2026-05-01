@@ -35,6 +35,10 @@ pub async fn run(args: CertifyArgs) -> anyhow::Result<()> {
     // Manifest-level checks (not covered by the compose validator)
     let checks: Vec<(&str, bool)> = vec![
         ("app name configured", !manifest.app.name.is_empty()),
+        (
+            "app ID is not a placeholder",
+            !manifest.app.id.as_str().starts_with("com.example"),
+        ),
         ("app version configured", !manifest.app.version.is_empty()),
         ("icon configured", manifest.app.icon.is_some()),
         ("frontend route configured", !manifest.routes.is_empty()),

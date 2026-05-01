@@ -3,6 +3,22 @@ use std::path::{Path, PathBuf};
 
 use crate::manifest::compiled_manifest::CompiledManifest;
 
+/// Built-in splash messages used when the app doesn't provide custom ones
+pub fn default_splash_messages() -> Vec<String> {
+    vec![
+        "Unpacking your bento box...".into(),
+        "Warming up the containers...".into(),
+        "Preparing something delicious...".into(),
+        "Almost ready to serve...".into(),
+        "Arranging the compartments...".into(),
+        "Fresh ingredients loading...".into(),
+        "Plating your app...".into(),
+        "Adding the finishing touches...".into(),
+        "Your app is being boxed up...".into(),
+        "Seasoning the services...".into(),
+    ]
+}
+
 pub struct BundleWriter {
     output_dir: PathBuf,
 }
@@ -43,13 +59,19 @@ impl BundleWriter {
         window_title: &str,
         width: u32,
         height: u32,
+        splash_logo: Option<&str>,
+        splash_messages: &[String],
     ) -> Result<(), bento_core::BentoError> {
         let config = serde_json::json!({
             "appId": app_id,
             "appName": app_name,
             "windowTitle": window_title,
             "width": width,
-            "height": height
+            "height": height,
+            "splash": {
+                "logo": splash_logo,
+                "messages": if splash_messages.is_empty() { default_splash_messages() } else { splash_messages.to_vec() }
+            }
         });
         let path = self.output_dir.join("shell").join("shell-config.json");
         let json = serde_json::to_string_pretty(&config).map_err(|e| {

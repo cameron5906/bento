@@ -132,6 +132,8 @@ pub async fn run(args: BuildArgs) -> anyhow::Result<()> {
         &manifest.window.title,
         manifest.window.width,
         manifest.window.height,
+        manifest.splash.logo.as_ref().map(|p| p.to_string_lossy().as_ref().to_string()).as_deref(),
+        &manifest.splash.messages,
     )?;
     output::success("Wrote shell-config.json");
 

@@ -244,6 +244,7 @@ mod tests {
                 mode: InstallMode::Consumer,
                 ask_questions: false,
             },
+            splash: Default::default(),
         }
     }
 

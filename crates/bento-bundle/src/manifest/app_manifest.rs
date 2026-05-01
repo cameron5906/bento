@@ -19,6 +19,8 @@ pub struct AppManifest {
     pub lifecycle: LifecycleConfig,
     #[serde(default)]
     pub install: InstallConfig,
+    #[serde(default)]
+    pub splash: SplashConfig,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -143,6 +145,27 @@ impl Default for InstallConfig {
         Self {
             mode: default_install_mode(),
             ask_questions: false,
+        }
+    }
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct SplashConfig {
+    /// Path to a custom logo image (PNG). If not set, uses the Bento default logo.
+    #[serde(default)]
+    pub logo: Option<PathBuf>,
+    /// Array of splash messages shown randomly during loading.
+    /// If empty, uses built-in defaults.
+    #[serde(default)]
+    pub messages: Vec<String>,
+}
+
+impl Default for SplashConfig {
+    fn default() -> Self {
+        Self {
+            logo: None,
+            messages: Vec::new(),
         }
     }
 }
