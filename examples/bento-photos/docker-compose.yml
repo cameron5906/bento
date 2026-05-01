@@ -25,6 +25,9 @@ services:
     environment:
       DATABASE_URL: postgres://postgres:postgres@db:5432/bentophotos
       REDIS_URL: redis://redis:6379
+      PHOTO_STORAGE_PATH: /data/photos
+    volumes:
+      - photo-storage:/data/photos
     depends_on:
       - db
       - redis

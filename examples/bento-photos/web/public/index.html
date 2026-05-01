@@ -274,11 +274,14 @@ function bindEvents() {
     dropzone.addEventListener('dragleave', () => dropzone.classList.remove('active'));
     dropzone.addEventListener('drop', e => { e.preventDefault(); dropzone.classList.remove('active'); uploadFiles(e.dataTransfer.files); });
   }
-
-  // Global drag-drop on the grid view
-  document.body.addEventListener('dragover', e => e.preventDefault());
-  document.body.addEventListener('drop', e => { e.preventDefault(); if (e.dataTransfer.files.length && view === 'gallery') uploadFiles(e.dataTransfer.files); });
 }
+
+// Global drag-drop — registered once, works on all views
+document.addEventListener('dragover', e => e.preventDefault());
+document.addEventListener('drop', e => {
+  e.preventDefault();
+  if (e.dataTransfer.files.length && view === 'gallery') uploadFiles(e.dataTransfer.files);
+});
 
 // Check settings on load
 async function init() {
