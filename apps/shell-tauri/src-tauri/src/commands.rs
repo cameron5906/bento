@@ -230,12 +230,46 @@ async fn wait_for_sock_file(path: &std::path::Path) -> Result<SupervisorSockInfo
     ))
 }
 
-/// Read splash config from bundle/shell/shell-config.json
+/// Read splash config from bundle/shell/shell-config.json.
+/// Returns the logo as a base64 data URL so it works in the Tauri webview
+/// without needing a file server for the bundle directory.
 fn read_splash_config(bundle_path: &std::path::Path) -> (Option<String>, Vec<String>) {
     let config_path = bundle_path.join("shell").join("shell-config.json");
     if let Ok(content) = std::fs::read_to_string(&config_path) {
         if let Ok(config) = serde_json::from_str::<serde_json::Value>(&content) {
-            let logo = config["splash"]["logo"].as_str().map(|s| s.to_string());
+            // Convert logo filename to base64 data URL
+            let logo = config["splash"]["logo"]
+                .as_str()
+                .and_then(|filename| {
+                    // Try multiple resolution paths — the config may store
+                    // just a filename, a relative path, or an assets/ path
+                    let basename = std::path::Path::new(filename)
+                        .file_name()
+                        .unwrap_or_default()
+                        .to_string_lossy()
+                        .to_string();
+                    let candidates = [
+                        bundle_path.join("assets").join(&basename),
+                        bundle_path.join(filename),
+                        bundle_path.join("assets").join(filename),
+                    ];
+                    let logo_path = candidates.iter().find(|p| p.exists())?;
+                    {
+                        if let Ok(data) = std::fs::read(logo_path) {
+                            let encoded = base64_encode(&data);
+                            let mime = if filename.ends_with(".png") {
+                                "image/png"
+                            } else if filename.ends_with(".jpg") || filename.ends_with(".jpeg") {
+                                "image/jpeg"
+                            } else {
+                                "image/png"
+                            };
+                            return Some(format!("data:{};base64,{}", mime, encoded));
+                        }
+                    }
+                    None
+                });
+
             let messages: Vec<String> = config["splash"]["messages"]
                 .as_array()
                 .map(|arr| {
@@ -248,4 +282,28 @@ fn read_splash_config(bundle_path: &std::path::Path) -> (Option<String>, Vec<Str
         }
     }
     (None, Vec::new())
+}
+
+fn base64_encode(data: &[u8]) -> String {
+    const CHARS: &[u8] = b"ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/";
+    let mut result = String::with_capacity((data.len() + 2) / 3 * 4);
+    for chunk in data.chunks(3) {
+        let b0 = chunk[0] as u32;
+        let b1 = if chunk.len() > 1 { chunk[1] as u32 } else { 0 };
+        let b2 = if chunk.len() > 2 { chunk[2] as u32 } else { 0 };
+        let n = (b0 << 16) | (b1 << 8) | b2;
+        result.push(CHARS[((n >> 18) & 0x3F) as usize] as char);
+        result.push(CHARS[((n >> 12) & 0x3F) as usize] as char);
+        if chunk.len() > 1 {
+            result.push(CHARS[((n >> 6) & 0x3F) as usize] as char);
+        } else {
+            result.push('=');
+        }
+        if chunk.len() > 2 {
+            result.push(CHARS[(n & 0x3F) as usize] as char);
+        } else {
+            result.push('=');
+        }
+    }
+    result
 }
