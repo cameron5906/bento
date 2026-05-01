@@ -18,7 +18,8 @@
         "height": 800,
         "center": true,
         "resizable": true,
-        "decorations": true
+        "decorations": true,
+        "dragDropEnabled": false
       }
     ],
     "security": {
