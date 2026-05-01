@@ -54,9 +54,18 @@ pub async fn launch_supervisor(
     let sock_path = supervisor_sock_path(&app_id, &app_name);
     let _ = std::fs::remove_file(&sock_path);
 
-    let child = tokio::process::Command::new(&supervisor_path)
-        .arg(bundle_path.to_string_lossy().as_ref())
-        .kill_on_drop(true) // stop supervisor when shell exits
+    let mut cmd = tokio::process::Command::new(&supervisor_path);
+    cmd.arg(bundle_path.to_string_lossy().as_ref())
+        .kill_on_drop(true); // stop supervisor when shell exits
+
+    // Hide the supervisor's console window on Windows
+    #[cfg(windows)]
+    {
+        use std::os::windows::process::CommandExt;
+        cmd.creation_flags(0x08000000); // CREATE_NO_WINDOW
+    }
+
+    let child = cmd
         .spawn()
         .map_err(|e| format!("failed to launch supervisor: {}", e))?;
 
