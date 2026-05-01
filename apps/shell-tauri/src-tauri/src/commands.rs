@@ -241,9 +241,21 @@ fn read_splash_config(bundle_path: &std::path::Path) -> (Option<String>, Vec<Str
             let logo = config["splash"]["logo"]
                 .as_str()
                 .and_then(|filename| {
-                    let logo_path = bundle_path.join("assets").join(filename);
-                    if logo_path.exists() {
-                        if let Ok(data) = std::fs::read(&logo_path) {
+                    // Try multiple resolution paths — the config may store
+                    // just a filename, a relative path, or an assets/ path
+                    let basename = std::path::Path::new(filename)
+                        .file_name()
+                        .unwrap_or_default()
+                        .to_string_lossy()
+                        .to_string();
+                    let candidates = [
+                        bundle_path.join("assets").join(&basename),
+                        bundle_path.join(filename),
+                        bundle_path.join("assets").join(filename),
+                    ];
+                    let logo_path = candidates.iter().find(|p| p.exists())?;
+                    {
+                        if let Ok(data) = std::fs::read(logo_path) {
                             let encoded = base64_encode(&data);
                             let mime = if filename.ends_with(".png") {
                                 "image/png"
