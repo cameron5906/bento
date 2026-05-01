@@ -150,6 +150,16 @@ pub async fn run(args: BuildArgs) -> anyhow::Result<()> {
         }
     }
 
+    // Copy splash logo if specified
+    if let Some(ref splash_logo) = manifest.splash.logo {
+        let logo_path = manifest_dir.join(splash_logo);
+        if logo_path.exists() {
+            let filename = logo_path.file_name().unwrap_or_default().to_string_lossy().to_string();
+            writer.copy_asset(&logo_path, &filename)?;
+            output::success("Copied splash logo");
+        }
+    }
+
     if !build_results.is_empty() {
         image_pipeline::print_size_report(&build_results);
     }
